@@ -23,6 +23,11 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") as LicenseStatus | null;
     if (status) filters.status = status;
 
+    const software = searchParams.get("software");
+    if (software) {
+      filters.search = filters.search ? `${filters.search} ${software}` : software;
+    }
+
     const licenses = licenseService.getAll(filters);
 
     return NextResponse.json({
