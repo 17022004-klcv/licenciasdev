@@ -41,7 +41,7 @@ export default function LoginPage() {
           showConfirmButton: false,
         });
 
-        router.push("/");
+        router.push("/admin/catalogo");
       } else {
         await Swal.fire({
           icon: "error",
