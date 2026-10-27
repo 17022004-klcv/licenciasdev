@@ -1,9 +1,9 @@
 allowBuilds:
   '@prisma/engines': true
-  bcrypt: set this to true or false
+  bcrypt: true
   esbuild: true
   prisma: false
   sharp: false
-  sqlite3: set this to true or false
+  sqlite3: true
   unrs-resolver: false
   workerd: true
