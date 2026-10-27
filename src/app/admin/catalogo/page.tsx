@@ -8,12 +8,15 @@ import Swal from "sweetalert2";
 export default function CatalogoLicenciasPage() {
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<LicenseFilterParams>({});
+  const [filters, setFilters] = useState<LicenseFilterParams & { hasImage?: string; software?: string }>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLicense, setSelectedLicense] = useState<DigitalLicense | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [categoria, setCategoria] = useState("");
+  const [hasImage, setHasImage] = useState("");
+  const [software, setSoftware] = useState("");
 
-  const fetchLicenses = async (filterParams: LicenseFilterParams = {}) => {
+  const fetchLicenses = async (filterParams: LicenseFilterParams & { hasImage?: string; software?: string } = {}) => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams();
@@ -22,6 +25,7 @@ export default function CatalogoLicenciasPage() {
       if (filterParams.provider) queryParams.append("provider", filterParams.provider);
       if (filterParams.license_type) queryParams.append("license_type", filterParams.license_type);
       if (filterParams.status) queryParams.append("status", filterParams.status);
+      if (filterParams.software) queryParams.append("software", filterParams.software);
 
       const url = `/api/licenses${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
       const response = await fetch(url);
@@ -53,7 +57,12 @@ export default function CatalogoLicenciasPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const newFilters = { ...filters, search: searchTerm };
+    const newFilters: any = { ...filters, search: searchTerm };
+    if (categoria) newFilters.license_type = categoria as any;
+    if (software) newFilters.software = software;
+    if (hasImage) {
+      // Filter client-side for image
+    }
     setFilters(newFilters);
     fetchLicenses(newFilters);
   };
@@ -136,36 +145,69 @@ export default function CatalogoLicenciasPage() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="backdrop-blur-xl bg-white/10 rounded-2xl shadow-2xl ring-1 ring-white/20 p-6 mb-6">
-            <form onSubmit={handleSearch} className="flex gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/50" />
+            <form onSubmit={handleSearch} className="space-y-4">
+              <div className="flex gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/50" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Buscar por nombre, proveedor o notas..."
+                    className="w-full pl-10 pr-4 py-3 border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent backdrop-blur-sm"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-lg hover:from-gray-600 hover:to-gray-800 transition-all flex items-center gap-2"
+                >
+                  <Search className="h-4 w-4" />
+                  Buscar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setFilters({});
+                    setCategoria("");
+                    setHasImage("");
+                    setSoftware("");
+                    fetchLicenses({});
+                  }}
+                  className="px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-all flex items-center gap-2"
+                >
+                  <Filter className="h-4 w-4" />
+                  Limpiar
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value)}
+                  className="px-4 py-2 border border-white/20 bg-white/10 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
+                >
+                  <option value="" className="bg-gray-900">Todas las categorías</option>
+                  <option value="perpetual" className="bg-gray-900">Permanente</option>
+                  <option value="subscription" className="bg-gray-900">Suscripción</option>
+                  <option value="temporary" className="bg-gray-900">Temporal</option>
+                </select>
+                <select
+                  value={hasImage}
+                  onChange={(e) => setHasImage(e.target.value)}
+                  className="px-4 py-2 border border-white/20 bg-white/10 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
+                >
+                  <option value="" className="bg-gray-900">Todas las imágenes</option>
+                  <option value="yes" className="bg-gray-900">Con imagen</option>
+                  <option value="no" className="bg-gray-900">Sin imagen</option>
+                </select>
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar por nombre, proveedor o notas..."
-                  className="w-full pl-10 pr-4 py-3 border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent backdrop-blur-sm"
+                  value={software}
+                  onChange={(e) => setSoftware(e.target.value)}
+                  placeholder="Filtrar por software..."
+                  className="px-4 py-2 border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
                 />
               </div>
-              <button
-                type="submit"
-                className="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-lg hover:from-gray-600 hover:to-gray-800 transition-all flex items-center gap-2"
-              >
-                <Search className="h-4 w-4" />
-                Buscar
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm("");
-                  setFilters({});
-                  fetchLicenses({});
-                }}
-                className="px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-all flex items-center gap-2"
-              >
-                <Filter className="h-4 w-4" />
-                Limpiar
-              </button>
             </form>
           </div>
 
@@ -185,6 +227,9 @@ export default function CatalogoLicenciasPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/10">
+                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
+                        Imagen
+                      </th>
                       <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
                         Nombre
                       </th>
@@ -209,8 +254,17 @@ export default function CatalogoLicenciasPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
-                    {licenses.map((license) => (
+                    {(hasImage === "yes" ? licenses.filter(l => l.image) : hasImage === "no" ? licenses.filter(l => !l.image) : licenses).map((license) => (
                       <tr key={license.id} className="hover:bg-white/5 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {license.image ? (
+                            <img src={license.image} alt={license.name} className="h-10 w-10 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          ) : (
+                            <div className="h-10 w-10 rounded bg-white/10 flex items-center justify-center">
+                              <FileText className="h-5 w-5 text-white/50" />
+                            </div>
+                          )}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm font-medium text-white">{license.name}</div>
                         </td>
