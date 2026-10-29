@@ -2,30 +2,53 @@
 
 import { useEffect, useState } from "react";
 import { DigitalLicense, LicenseFilterParams } from "@/src/type";
-import { FileText, Search, Filter, Eye, X } from "lucide-react";
+import {
+  FileText,
+  Search,
+  Filter,
+  Eye,
+  Edit,
+  Trash2,
+  Plus,
+  X,
+} from "lucide-react";
 import Swal from "sweetalert2";
 
 export default function CatalogoLicenciasPage() {
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<LicenseFilterParams & { hasImage?: string; software?: string }>({});
+  const [filters, setFilters] = useState<
+    LicenseFilterParams & { hasImage?: string; software?: string }
+  >({});
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedLicense, setSelectedLicense] = useState<DigitalLicense | null>(null);
+  const [selectedLicense, setSelectedLicense] = useState<DigitalLicense | null>(
+    null,
+  );
   const [showModal, setShowModal] = useState(false);
   const [categoria, setCategoria] = useState("");
   const [hasImage, setHasImage] = useState("");
   const [software, setSoftware] = useState("");
 
-  const fetchLicenses = async (filterParams: LicenseFilterParams & { hasImage?: string; software?: string } = {}) => {
+  const fetchLicenses = async (
+    filterParams: LicenseFilterParams & {
+      hasImage?: string;
+      software?: string;
+    } = {},
+  ) => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams();
-      if (filterParams.search) queryParams.append("search", filterParams.search);
+      if (filterParams.search)
+        queryParams.append("search", filterParams.search);
       if (filterParams.name) queryParams.append("name", filterParams.name);
-      if (filterParams.provider) queryParams.append("provider", filterParams.provider);
-      if (filterParams.license_type) queryParams.append("license_type", filterParams.license_type);
-      if (filterParams.status) queryParams.append("status", filterParams.status);
-      if (filterParams.software) queryParams.append("software", filterParams.software);
+      if (filterParams.provider)
+        queryParams.append("provider", filterParams.provider);
+      if (filterParams.license_type)
+        queryParams.append("license_type", filterParams.license_type);
+      if (filterParams.status)
+        queryParams.append("status", filterParams.status);
+      if (filterParams.software)
+        queryParams.append("software", filterParams.software);
 
       const url = `/api/licenses${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
       const response = await fetch(url);
@@ -55,17 +78,18 @@ export default function CatalogoLicenciasPage() {
     fetchLicenses(filters);
   }, []);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Búsqueda automática al cambiar términos o filtros
+  useEffect(() => {
     const newFilters: any = { ...filters, search: searchTerm };
     if (categoria) newFilters.license_type = categoria as any;
+    else delete newFilters.license_type;
+
     if (software) newFilters.software = software;
-    if (hasImage) {
-      // Filter client-side for image
-    }
+    else delete newFilters.software;
+
     setFilters(newFilters);
     fetchLicenses(newFilters);
-  };
+  }, [searchTerm, categoria, software, hasImage]);
 
   const openModal = (license: DigitalLicense) => {
     setSelectedLicense(license);
@@ -77,31 +101,59 @@ export default function CatalogoLicenciasPage() {
     setSelectedLicense(null);
   };
 
+  const handleEdit = (license: DigitalLicense) => {
+    // Lógica o redirección de edición
+    console.log("Editar licencia:", license.id);
+  };
+
+  const handleDelete = async (license: DigitalLicense) => {
+    const result = await Swal.fire({
+      title: "¿Eliminar licencia?",
+      text: `¿Estás seguro de eliminar "${license.name}"?`,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#91A91C",
+      cancelButtonColor: "#68716D",
+      confirmButtonText: "Sí, eliminar",
+      cancelButtonText: "Cancelar",
+    });
+
+    if (result.isConfirmed) {
+      // Lógica de eliminación conservando tu estructura
+      console.log("Eliminar licencia:", license.id);
+    }
+  };
+
+  const handleAdd = () => {
+    // Lógica o redirección para agregar nueva licencia
+    console.log("Agregar nueva licencia");
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
-        return "bg-green-500/20 text-green-300 border-green-500/30";
+        return "bg-[#D7ED4B]/20 text-[#17201D] border-[#91A91C]/30";
       case "expired":
-        return "bg-red-500/20 text-red-300 border-red-500/30";
+        return "bg-red-500/20 text-red-700 border-red-500/30";
       case "suspended":
-        return "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+        return "bg-yellow-500/20 text-yellow-800 border-yellow-500/30";
       case "revoked":
-        return "bg-gray-500/20 text-gray-300 border-gray-500/30";
+        return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
       default:
-        return "bg-gray-500/20 text-gray-300 border-gray-500/30";
+        return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
       case "perpetual":
-        return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+        return "bg-[#E7EDE2] text-[#17201D] border-[#DFE3DD]";
       case "subscription":
-        return "bg-purple-500/20 text-purple-300 border-purple-500/30";
+        return "bg-[#D7ED4B]/30 text-[#17201D] border-[#91A91C]/40";
       case "temporary":
-        return "bg-orange-500/20 text-orange-300 border-orange-500/30";
+        return "bg-[#91A91C]/20 text-[#17201D] border-[#91A91C]/30";
       default:
-        return "bg-gray-500/20 text-gray-300 border-gray-500/30";
+        return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
     }
   };
 
@@ -118,213 +170,246 @@ export default function CatalogoLicenciasPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -left-40 h-80 w-80 rounded-full bg-gray-700 opacity-40 blur-3xl animate-pulse"></div>
-        <div className="absolute top-20 right-20 h-96 w-96 rounded-full bg-gray-600 opacity-30 blur-3xl animate-pulse"></div>
-        <div className="absolute -bottom-60 left-1/4 h-72 w-72 rounded-full bg-gray-700 opacity-35 blur-3xl animate-pulse"></div>
+    <div className="flex h-full w-full flex-col bg-[#F5F5F0] p-6 md:p-8">
+      {/* Cabecera y botón de Agregar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 shrink-0">
+        <div>
+          <h1 className="text-3xl font-bold text-[#17201D]">
+            Catálogo de Licencias
+          </h1>
+          <p className="text-[#68716D] mt-1">
+            Gestión y control de licencias digitales
+          </p>
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-sm font-medium text-[#68716D]">
+            {licenses.length} {licenses.length === 1 ? "licencia" : "licencias"}
+          </span>
+          <button
+            onClick={handleAdd}
+            className="px-4 py-2.5 bg-[#D7ED4B] text-[#17201D] font-semibold rounded-xl hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all flex items-center gap-2 shadow-sm"
+          >
+            <Plus className="h-5 w-5" />
+            Nueva Licencia
+          </button>
+        </div>
       </div>
 
-      <div className="relative z-10 min-h-screen">
-        <div className="backdrop-blur-xl bg-white/5 border-b border-white/10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <FileText className="h-8 w-8 text-white" />
-                <div>
-                  <h1 className="text-2xl font-bold text-white">Catálogo de Licencias</h1>
-                  <p className="text-sm text-white/70">Gestión de licencias digitales</p>
-                </div>
-              </div>
-              <div className="text-sm text-white/70">
-                {licenses.length} {licenses.length === 1 ? "licencia" : "licencias"}
-              </div>
+      {/* Filtros y Búsqueda Automática */}
+      <div className="bg-[#FBFCF8] rounded-2xl shadow-sm border border-[#DFE3DD] p-5 mb-6 shrink-0">
+        <div className="space-y-4">
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#859087]" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nombre, proveedor o notas..."
+                className="w-full pl-11 pr-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] placeholder-[#859087] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C] transition-all"
+              />
             </div>
-          </div>
-        </div>
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="backdrop-blur-xl bg-white/10 rounded-2xl shadow-2xl ring-1 ring-white/20 p-6 mb-6">
-            <form onSubmit={handleSearch} className="space-y-4">
-              <div className="flex gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-white/50" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Buscar por nombre, proveedor o notas..."
-                    className="w-full pl-10 pr-4 py-3 border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent backdrop-blur-sm"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="px-6 py-3 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-lg hover:from-gray-600 hover:to-gray-800 transition-all flex items-center gap-2"
-                >
-                  <Search className="h-4 w-4" />
-                  Buscar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSearchTerm("");
-                    setFilters({});
-                    setCategoria("");
-                    setHasImage("");
-                    setSoftware("");
-                    fetchLicenses({});
-                  }}
-                  className="px-6 py-3 border border-white/20 text-white rounded-lg hover:bg-white/10 transition-all flex items-center gap-2"
-                >
-                  <Filter className="h-4 w-4" />
-                  Limpiar
-                </button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <select
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  className="px-4 py-2 border border-white/20 bg-white/10 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
-                >
-                  <option value="" className="bg-gray-900">Todas las categorías</option>
-                  <option value="perpetual" className="bg-gray-900">Permanente</option>
-                  <option value="subscription" className="bg-gray-900">Suscripción</option>
-                  <option value="temporary" className="bg-gray-900">Temporal</option>
-                </select>
-                <select
-                  value={hasImage}
-                  onChange={(e) => setHasImage(e.target.value)}
-                  className="px-4 py-2 border border-white/20 bg-white/10 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
-                >
-                  <option value="" className="bg-gray-900">Todas las imágenes</option>
-                  <option value="yes" className="bg-gray-900">Con imagen</option>
-                  <option value="no" className="bg-gray-900">Sin imagen</option>
-                </select>
-                <input
-                  type="text"
-                  value={software}
-                  onChange={(e) => setSoftware(e.target.value)}
-                  placeholder="Filtrar por software..."
-                  className="px-4 py-2 border border-white/20 bg-white/10 text-white placeholder-white/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 backdrop-blur-sm"
-                />
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm("");
+                setFilters({});
+                setCategoria("");
+                setHasImage("");
+                setSoftware("");
+                fetchLicenses({});
+              }}
+              className="px-5 py-2.5 border border-[#DFE3DD] text-[#68716D] bg-[#FBFCF8] rounded-xl hover:bg-[#E7EDE2] hover:text-[#17201D] transition-all flex items-center gap-2 font-medium"
+            >
+              <Filter className="h-4 w-4" />
+              Limpiar
+            </button>
           </div>
 
-          <div className="backdrop-blur-xl bg-white/10 rounded-2xl shadow-2xl ring-1 ring-white/20 overflow-hidden">
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
-              </div>
-            ) : licenses.length === 0 ? (
-              <div className="p-12 text-center">
-                <FileText className="h-16 w-16 text-white/40 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-white mb-2">No hay licencias</h3>
-                <p className="text-white/70">No se encontraron licencias con los filtros aplicados</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Imagen
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Nombre
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Proveedor
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Tipo
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Estado
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Precio
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Expiración
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-medium text-white/70 uppercase tracking-wider">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {(hasImage === "yes" ? licenses.filter(l => l.image) : hasImage === "no" ? licenses.filter(l => !l.image) : licenses).map((license) => (
-                      <tr key={license.id} className="hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {license.image ? (
-                            <img src={license.image} alt={license.name} className="h-10 w-10 rounded object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                          ) : (
-                            <div className="h-10 w-10 rounded bg-white/10 flex items-center justify-center">
-                              <FileText className="h-5 w-5 text-white/50" />
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-white">{license.name}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-white/90">{license.provider}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}>
-                            {license.license_type === "perpetual" ? "Permanente" : license.license_type === "subscription" ? "Suscripción" : "Temporal"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(license.status)}`}>
-                            {license.status === "active" ? "Activo" : license.status === "expired" ? "Expirado" : license.status === "suspended" ? "Suspendido" : "Revocado"}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-white">{formatPrice(license.price)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-white/90">{formatDate(license.expiration_date)}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <button
-                            onClick={() => openModal(license)}
-                            className="text-white/70 hover:text-white transition-colors inline-flex items-center gap-1"
-                          >
-                            <Eye className="h-4 w-4" />
-                            Ver detalles
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <select
+              value={categoria}
+              onChange={(e) => setCategoria(e.target.value)}
+              className="px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C]"
+            >
+              <option value="">Todas las categorías</option>
+              <option value="perpetual">Permanente</option>
+              <option value="subscription">Suscripción</option>
+              <option value="temporary">Temporal</option>
+            </select>
+            <select
+              value={hasImage}
+              onChange={(e) => setHasImage(e.target.value)}
+              className="px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C]"
+            >
+              <option value="">Todas las imágenes</option>
+              <option value="yes">Con imagen</option>
+              <option value="no">Sin imagen</option>
+            </select>
+            <input
+              type="text"
+              value={software}
+              onChange={(e) => setSoftware(e.target.value)}
+              placeholder="Filtrar por software..."
+              className="px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] placeholder-[#859087] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C]"
+            />
           </div>
         </div>
       </div>
 
+      {/* Tabla de Resultados */}
+      <div className="flex min-h-0 flex-1 flex-col bg-[#FBFCF8] rounded-2xl shadow-sm border border-[#DFE3DD] overflow-hidden">
+        {loading ? (
+          <div className="flex flex-1 justify-center items-center py-16">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#91A91C]"></div>
+          </div>
+        ) : licenses.length === 0 ? (
+          <div className="p-16 text-center">
+            <FileText className="h-16 w-16 text-[#859087] mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-[#17201D] mb-1">
+              No hay licencias
+            </h3>
+            <p className="text-[#68716D]">
+              No se encontraron licencias con los filtros aplicados
+            </p>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="sticky top-0 z-10 border-b border-[#DFE3DD] bg-[#EEF2E9] text-xs font-semibold text-[#68716D] uppercase tracking-wider">
+                  <th className="px-6 py-4">Imagen</th>
+                  <th className="px-6 py-4">Nombre</th>
+                  <th className="px-6 py-4">Proveedor</th>
+                  <th className="px-6 py-4">Tipo</th>
+                  <th className="px-6 py-4">Estado</th>
+                  <th className="px-6 py-4">Precio</th>
+                  <th className="px-6 py-4">Expiración</th>
+                  <th className="px-6 py-4 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DFE3DD] text-sm">
+                {(hasImage === "yes"
+                  ? licenses.filter((l) => l.image)
+                  : hasImage === "no"
+                    ? licenses.filter((l) => !l.image)
+                    : licenses
+                ).map((license) => (
+                  <tr
+                    key={license.id}
+                    className="hover:bg-[#E7EDE2]/20 transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {license.image ? (
+                        <img
+                          src={license.image}
+                          alt={license.name}
+                          className="h-10 w-10 rounded-lg object-cover border border-[#DFE3DD]"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display =
+                              "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-lg bg-[#E7EDE2] flex items-center justify-center border border-[#DFE3DD]">
+                          <FileText className="h-5 w-5 text-[#859087]" />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-[#17201D]">
+                      {license.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-[#68716D]">
+                      {license.provider}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}
+                      >
+                        {license.license_type === "perpetual"
+                          ? "Permanente"
+                          : license.license_type === "subscription"
+                            ? "Suscripción"
+                            : "Temporal"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(license.status)}`}
+                      >
+                        {license.status === "active"
+                          ? "Activo"
+                          : license.status === "expired"
+                            ? "Expirado"
+                            : license.status === "suspended"
+                              ? "Suspendido"
+                              : "Revocado"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-medium text-[#17201D]">
+                      {formatPrice(license.price)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-[#68716D]">
+                      {formatDate(license.expiration_date)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => openModal(license)}
+                          title="Ver detalles"
+                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B] transition-all"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleEdit(license)}
+                          title="Editar"
+                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(license)}
+                          title="Eliminar"
+                          className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de Detalles */}
       {showModal && selectedLicense && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 transition-opacity" onClick={closeModal}></div>
+            <div
+              className="fixed inset-0 transition-opacity bg-[#17201D]/50 backdrop-blur-sm"
+              onClick={closeModal}
+            ></div>
 
-            <div className="inline-block align-bottom bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full ring-1 ring-white/20 relative z-10">
-              <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">Detalles de la Licencia</h3>
+            <div className="inline-block align-bottom bg-[#FBFCF8] rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full border border-[#DFE3DD] relative z-10">
+              <div className="px-6 py-4 border-b border-[#DFE3DD] flex items-center justify-between bg-[#E7EDE2]/50">
+                <h3 className="text-lg font-semibold text-[#17201D]">
+                  Detalles de la Licencia
+                </h3>
                 <button
                   onClick={closeModal}
-                  className="text-white/70 hover:text-white transition-colors"
+                  className="text-[#68716D] hover:text-[#17201D] transition-colors"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
-              <div className="px-6 py-6 space-y-4">
+              <div className="px-6 py-6 space-y-4 max-h-[70vh] overflow-y-auto">
                 {selectedLicense.image && (
-                  <div className="w-full h-48 bg-white/5 rounded-lg overflow-hidden">
+                  <div className="w-full h-48 bg-[#F5F5F0] rounded-xl overflow-hidden border border-[#DFE3DD]">
                     <img
                       src={selectedLicense.image}
                       alt={selectedLicense.name}
@@ -339,29 +424,55 @@ export default function CatalogoLicenciasPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Nombre</label>
-                    <p className="text-white mt-1">{selectedLicense.name}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Nombre
+                    </label>
+                    <p className="text-[#17201D] mt-1 font-medium">
+                      {selectedLicense.name}
+                    </p>
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Proveedor</label>
-                    <p className="text-white mt-1">{selectedLicense.provider}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Proveedor
+                    </label>
+                    <p className="text-[#17201D] mt-1 font-medium">
+                      {selectedLicense.provider}
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Tipo de Licencia</label>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Tipo de Licencia
+                    </label>
                     <div className="mt-1">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(selectedLicense.license_type)}`}>
-                        {selectedLicense.license_type === "perpetual" ? "Permanente" : selectedLicense.license_type === "subscription" ? "Suscripción" : "Temporal"}
+                      <span
+                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor(selectedLicense.license_type)}`}
+                      >
+                        {selectedLicense.license_type === "perpetual"
+                          ? "Permanente"
+                          : selectedLicense.license_type === "subscription"
+                            ? "Suscripción"
+                            : "Temporal"}
                       </span>
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Estado</label>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Estado
+                    </label>
                     <div className="mt-1">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedLicense.status)}`}>
-                        {selectedLicense.status === "active" ? "Activo" : selectedLicense.status === "expired" ? "Expirado" : selectedLicense.status === "suspended" ? "Suspendido" : "Revocado"}
+                      <span
+                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(selectedLicense.status)}`}
+                      >
+                        {selectedLicense.status === "active"
+                          ? "Activo"
+                          : selectedLicense.status === "expired"
+                            ? "Expirado"
+                            : selectedLicense.status === "suspended"
+                              ? "Suspendido"
+                              : "Revocado"}
                       </span>
                     </div>
                   </div>
@@ -369,23 +480,37 @@ export default function CatalogoLicenciasPage() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Precio</label>
-                    <p className="text-white mt-1 font-medium">{formatPrice(selectedLicense.price)}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Precio
+                    </label>
+                    <p className="text-[#17201D] mt-1 font-medium">
+                      {formatPrice(selectedLicense.price)}
+                    </p>
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Fecha de Compra</label>
-                    <p className="text-white mt-1">{formatDate(selectedLicense.purchase_date)}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Fecha de Compra
+                    </label>
+                    <p className="text-[#68716D] mt-1">
+                      {formatDate(selectedLicense.purchase_date)}
+                    </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Fecha de Expiración</label>
-                    <p className="text-white mt-1">{formatDate(selectedLicense.expiration_date)}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Fecha de Expiración
+                    </label>
+                    <p className="text-[#68716D] mt-1">
+                      {formatDate(selectedLicense.expiration_date)}
+                    </p>
                   </div>
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Clave de Licencia</label>
-                    <p className="text-white/90 mt-1 font-mono text-sm bg-white/5 px-2 py-1 rounded break-all">
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Clave de Licencia
+                    </label>
+                    <p className="text-[#17201D] mt-1 font-mono text-sm bg-[#F5F5F0] border border-[#DFE3DD] px-3 py-1.5 rounded-lg break-all">
                       {selectedLicense.license_key || "N/A"}
                     </p>
                   </div>
@@ -393,27 +518,20 @@ export default function CatalogoLicenciasPage() {
 
                 {selectedLicense.notes && (
                   <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Notas</label>
-                    <p className="text-white/90 mt-1 bg-white/5 p-3 rounded-lg text-sm">{selectedLicense.notes}</p>
+                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
+                      Notas
+                    </label>
+                    <p className="text-[#68716D] mt-1 bg-[#F5F5F0] border border-[#DFE3DD] p-3 rounded-lg text-sm">
+                      {selectedLicense.notes}
+                    </p>
                   </div>
                 )}
-
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/10">
-                  <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Creado</label>
-                    <p className="text-white/70 mt-1 text-sm">{formatDate(selectedLicense.created_at)}</p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-white/50 uppercase tracking-wider">Actualizado</label>
-                    <p className="text-white/70 mt-1 text-sm">{formatDate(selectedLicense.updated_at)}</p>
-                  </div>
-                </div>
               </div>
 
-              <div className="px-6 py-4 border-t border-white/10 flex justify-end">
+              <div className="px-6 py-4 border-t border-[#DFE3DD] flex justify-end bg-[#E7EDE2]/50">
                 <button
                   onClick={closeModal}
-                  className="px-4 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
+                  className="px-5 py-2 bg-[#17201D] text-[#F5F5F0] rounded-xl hover:bg-[#91A91C] transition-colors font-medium text-sm"
                 >
                   Cerrar
                 </button>
