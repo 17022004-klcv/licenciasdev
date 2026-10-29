@@ -47,3 +47,4 @@ next-env.d.ts
 # sqlite database (se genera con `pnpm seed`)
 licencias.db
 licencias.db-*
+dev.db

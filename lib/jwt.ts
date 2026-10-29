@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { JWTPayload } from "@/src/type";
 
-export const AUTH_COOKIE = "token";
+export const AUTH_COOKIE = "licencias_token";
 export const JWT_EXPIRES_IN_SECONDS = 60 * 60 * 24; // 24h
 
 // Se lee de forma diferida para no romper el build si la variable no está definida,
