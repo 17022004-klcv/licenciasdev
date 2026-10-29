@@ -200,7 +200,7 @@ export default function LoginPage() {
           </div>
 
           <p className="relative z-10 mt-8 text-[10px] tracking-[0.15em] text-white/35">
-            © {new Date().getFullYear()} SISTEMA DE LICENCIAS
+            © 2026 SISTEMA DE LICENCIAS
           </p>
         </div>
 
