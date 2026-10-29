@@ -1,3 +1,4 @@
+import { randomInt } from "crypto";
 import { getDb } from "@/lib/db";
 import {
   DigitalLicense,
@@ -6,11 +7,32 @@ import {
   LicenseFilterParams,
 } from "@/src/type";
 
+const MAX_PRICE = 1_000_000;
+
 function formatLicense(license: DigitalLicense): DigitalLicense {
   return {
     ...license,
     price: Number(license.price),
   };
+}
+
+function generateUniqueLicenseKey(db: ReturnType<typeof getDb>): string {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const groups = Array.from({ length: 4 }, () =>
+      randomInt(0, 10000).toString().padStart(4, "0"),
+    );
+    const key = groups.join("-");
+
+    const existing = db
+      .prepare("SELECT 1 FROM digital_licenses WHERE license_key = ?")
+      .get(key);
+
+    if (!existing) {
+      return key;
+    }
+  }
+
+  throw new Error("No se pudo generar una clave de licencia única");
 }
 
 export const licenseService = {
@@ -73,7 +95,6 @@ export const licenseService = {
     const {
       name,
       provider,
-      license_key = null,
       license_type,
       purchase_date = null,
       image = null,
@@ -91,6 +112,10 @@ export const licenseService = {
       throw new Error("El precio no puede ser negativo");
     }
 
+    if (price > MAX_PRICE) {
+      throw new Error("El precio no puede ser mayor a 1,000,000");
+    }
+
     if (purchase_date && expiration_date) {
       if (new Date(expiration_date) < new Date(purchase_date)) {
         throw new Error("La fecha de expiración no puede ser anterior a la de compra");
@@ -98,6 +123,7 @@ export const licenseService = {
     }
 
     const db = getDb();
+    const licenseKey = generateUniqueLicenseKey(db);
     const insert = db.prepare(`
       INSERT INTO digital_licenses (
         name, provider, license_key, license_type, purchase_date,
@@ -109,7 +135,7 @@ export const licenseService = {
     const result = insert.run(
       name.trim(),
       provider.trim(),
-      license_key ? license_key.trim() : null,
+      licenseKey,
       license_type,
       purchase_date || null,
       image ? image.trim() : null,
@@ -147,6 +173,10 @@ export const licenseService = {
       throw new Error("El precio no puede ser negativo");
     }
 
+    if (data.price !== undefined && data.price > MAX_PRICE) {
+      throw new Error("El precio no puede ser mayor a 1,000,000");
+    }
+
     const updates: string[] = [];
     const params: unknown[] = [];
 
@@ -157,10 +187,6 @@ export const licenseService = {
     if (data.provider !== undefined) {
       updates.push("provider = ?");
       params.push(data.provider.trim());
-    }
-    if (data.license_key !== undefined) {
-      updates.push("license_key = ?");
-      params.push(data.license_key ? data.license_key.trim() : null);
     }
     if (data.license_type !== undefined) {
       updates.push("license_type = ?");
