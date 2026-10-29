@@ -44,6 +44,28 @@ export function getDb(): DatabaseSync {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS sales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER REFERENCES employees(id) ON DELETE SET NULL,
+      total REAL NOT NULL CHECK (total >= 0),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- license_name y unit_price se copian al momento de la venta para que el historial
+    -- no cambie si la licencia se edita o se elimina después
+    CREATE TABLE IF NOT EXISTS sale_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL REFERENCES sales(id) ON DELETE CASCADE,
+      license_id INTEGER REFERENCES digital_licenses(id) ON DELETE SET NULL,
+      license_name TEXT NOT NULL,
+      unit_price REAL NOT NULL CHECK (unit_price >= 0),
+      quantity INTEGER NOT NULL CHECK (quantity > 0),
+      subtotal REAL NOT NULL CHECK (subtotal >= 0)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_sales_employee_id ON sales(employee_id);
+    CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
   `);
 
   return dbInstance;

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { employeeService } from "@/service/auth.service";
+import { requireAuth } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const employees = employeeService.getAll();
     return NextResponse.json({
@@ -15,6 +19,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const created = await employeeService.create(body);

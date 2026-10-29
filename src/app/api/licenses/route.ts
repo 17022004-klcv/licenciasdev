@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { licenseService } from "@/service/license.service";
 import { LicenseFilterParams, LicenseStatus, LicenseType } from "@/src/type";
+import { requireAuth } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const auth = requireAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = new URL(req.url);
 
@@ -42,6 +46,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const body = await req.json();
     const created = licenseService.create(body);

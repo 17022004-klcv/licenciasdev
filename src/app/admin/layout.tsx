@@ -1,11 +1,9 @@
+import AdminShell from "./_components/AdminShell";
+
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {children}
-    </div>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

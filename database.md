@@ -103,3 +103,28 @@ Potential future additions include:
 - A case-insensitive unique index for employee email addresses, if emails should be unique regardless of letter case.
 8. Summary
    The database begins with two focused tables: employees for application accounts and digital_licenses for license records. This design is intentionally small while leaving room for future relationships, session management, and auditability as requirements grow.
+9. Table: sales
+   Stores each sale registered from the point of sale (POS) view.
+   Column	Data type	Constraints	Description
+   id	INTEGER	Primary key, auto-generated	Unique sale identifier.
+   employee_id	INTEGER	Nullable, FK employees(id) ON DELETE SET NULL	Employee who registered the sale.
+   total	REAL	Not null, CHECK total >= 0	Sale total, calculated on the server from the license prices.
+   created_at	DATETIME	Not null, default: CURRENT_TIMESTAMP	Date and time of the sale.
+
+10. Table: sale_items
+   Stores the lines of each sale.
+   Column	Data type	Constraints	Description
+   id	INTEGER	Primary key, auto-generated	Unique line identifier.
+   sale_id	INTEGER	Not null, FK sales(id) ON DELETE CASCADE	Sale the line belongs to.
+   license_id	INTEGER	Nullable, FK digital_licenses(id) ON DELETE SET NULL	License sold.
+   license_name	TEXT	Not null	Snapshot of the license name at the time of sale.
+   unit_price	REAL	Not null, CHECK unit_price >= 0	Snapshot of the license price at the time of sale.
+   quantity	INTEGER	Not null, CHECK quantity > 0	Units sold.
+   subtotal	REAL	Not null, CHECK subtotal >= 0	unit_price × quantity.
+
+Business rules
+- Prices are never taken from the client: the API reads them from digital_licenses when the sale is registered.
+- Only licenses with status = active can be sold.
+- license_name and unit_price are copied so the sales history does not change if a license is edited or deleted.
+- A sale and its lines are inserted in a single transaction.
+- Sales are immutable: there is no endpoint to edit or delete them.

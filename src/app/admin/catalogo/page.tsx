@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { DigitalLicense, LicenseFilterParams } from "@/src/type";
+import { useRouter } from "next/navigation";
 import { FileText, Search, Filter, Eye, X } from "lucide-react";
 import Swal from "sweetalert2";
 
 export default function CatalogoLicenciasPage() {
+  const router = useRouter();
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<LicenseFilterParams & { hasImage?: string; software?: string }>({});
@@ -29,6 +31,10 @@ export default function CatalogoLicenciasPage() {
 
       const url = `/api/licenses${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
       const response = await fetch(url);
+      if (response.status === 401) {
+        router.push("/login");
+        return;
+      }
       const data = await response.json();
 
       if (data.success) {
