@@ -44,6 +44,10 @@ export function getDb(): DatabaseSync {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_digital_licenses_license_key
+      ON digital_licenses(license_key)
+      WHERE license_key IS NOT NULL;
   `);
 
   return dbInstance;
