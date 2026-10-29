@@ -466,7 +466,7 @@ export default function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-[10px] tracking-[0.12em] text-[#9AA198] md:hidden">
-            © {new Date().getFullYear()} SISTEMA DE LICENCIAS
+            © 2026 SISTEMA DE LICENCIAS
           </p>
         </div>
       </section>
