@@ -34,7 +34,6 @@ export interface LicenseFilterParams {
 export interface CreateLicenseDTO {
   name: string;
   provider: string;
-  license_key?: string | null;
   license_type: LicenseType;
   purchase_date?: string | null;
   image?: string | null;
@@ -47,7 +46,6 @@ export interface CreateLicenseDTO {
 export interface UpdateLicenseDTO {
   name?: string;
   provider?: string;
-  license_key?: string | null;
   license_type?: LicenseType;
   purchase_date?: string | null;
   image?: string | null;

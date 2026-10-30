@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Swal from "sweetalert2";
@@ -12,6 +12,11 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [year, setYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -466,7 +471,7 @@ export default function LoginPage() {
           </div>
 
           <p className="mt-6 text-center text-[10px] tracking-[0.12em] text-[#9AA198] md:hidden">
-            © 2026 SISTEMA DE LICENCIAS
+            © {year} SISTEMA DE LICENCIAS
           </p>
         </div>
       </section>

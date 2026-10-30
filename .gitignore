@@ -41,7 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/src/app/generated/prisma
+/src/generated/prisma
 .idea
 
 # sqlite database (se genera con `pnpm seed`)

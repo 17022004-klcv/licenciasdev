@@ -66,6 +66,10 @@ export function getDb(): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS idx_sales_employee_id ON sales(employee_id);
     CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id ON sale_items(sale_id);
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_digital_licenses_license_key
+      ON digital_licenses(license_key)
+      WHERE license_key IS NOT NULL;
   `);
 
   return dbInstance;

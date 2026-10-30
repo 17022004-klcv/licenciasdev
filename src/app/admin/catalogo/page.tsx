@@ -1,42 +1,83 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { DigitalLicense, LicenseFilterParams } from "@/src/type";
+import { useCallback, useEffect, useState } from "react";
+import {
+  DigitalLicense,
+  LicenseFilterParams,
+  LicenseStatus,
+  LicenseType,
+} from "@/src/type";
 import { useRouter } from "next/navigation";
 import {
   FileText,
   Search,
   Filter,
   Eye,
+  EyeOff,
   Edit,
   Trash2,
   Plus,
   X,
+  Upload,
+  Loader2,
 } from "lucide-react";
 import Swal from "sweetalert2";
+
+type CatalogFilters = LicenseFilterParams & { software?: string };
+
+interface LicenseFormState {
+  name: string;
+  provider: string;
+  license_type: LicenseType;
+  purchase_date: string;
+  image: string;
+  price: string;
+  expiration_date: string;
+  status: LicenseStatus;
+  notes: string;
+}
+
+const EMPTY_FORM: LicenseFormState = {
+  name: "",
+  provider: "",
+  license_type: "subscription",
+  purchase_date: "",
+  image: "",
+  price: "",
+  expiration_date: "",
+  status: "active",
+  notes: "",
+};
+
+const inputClass =
+  "w-full px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] placeholder-[#859087] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C] transition-all";
+const labelClass =
+  "block text-xs text-[#859087] uppercase tracking-wider font-semibold mb-1";
 
 export default function CatalogoLicenciasPage() {
   const router = useRouter();
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<
-    LicenseFilterParams & { hasImage?: string; software?: string }
-  >({});
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLicense, setSelectedLicense] = useState<DigitalLicense | null>(
     null,
   );
   const [showModal, setShowModal] = useState(false);
+  const [showLicenseKey, setShowLicenseKey] = useState(false);
   const [categoria, setCategoria] = useState("");
   const [hasImage, setHasImage] = useState("");
   const [software, setSoftware] = useState("");
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingLicense, setEditingLicense] = useState<DigitalLicense | null>(
+    null,
+  );
+  const [form, setForm] = useState<LicenseFormState>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  const fetchLicenses = async (
-    filterParams: LicenseFilterParams & {
-      hasImage?: string;
-      software?: string;
-    } = {},
-  ) => {
+  const fetchLicenses = useCallback(
+    async (filterParams: CatalogFilters = {}) => {
     try {
       setLoading(true);
       const queryParams = new URLSearchParams();
@@ -69,7 +110,7 @@ export default function CatalogoLicenciasPage() {
           text: data.error || "Error al cargar licencias",
         });
       }
-    } catch (error) {
+    } catch {
       Swal.fire({
         icon: "error",
         title: "Error",
@@ -78,38 +119,218 @@ export default function CatalogoLicenciasPage() {
     } finally {
       setLoading(false);
     }
-  };
+    },
+    [router],
+  );
 
+  const getCurrentFilters = useCallback((): CatalogFilters => {
+    const currentFilters: CatalogFilters = {};
+    if (searchTerm.trim()) currentFilters.search = searchTerm.trim();
+    if (categoria) currentFilters.license_type = categoria as LicenseType;
+    if (software.trim()) currentFilters.software = software.trim();
+    return currentFilters;
+  }, [searchTerm, categoria, software]);
+
+  const refresh = useCallback(
+    () => fetchLicenses(getCurrentFilters()),
+    [fetchLicenses, getCurrentFilters],
+  );
+
+  // Búsqueda automática (con debounce) al cambiar términos o filtros
   useEffect(() => {
-    fetchLicenses(filters);
-  }, []);
+    const timeout = setTimeout(() => {
+      fetchLicenses(getCurrentFilters());
+    }, 300);
 
-  // Búsqueda automática al cambiar términos o filtros
-  useEffect(() => {
-    const newFilters: any = { ...filters, search: searchTerm };
-    if (categoria) newFilters.license_type = categoria as any;
-    else delete newFilters.license_type;
-
-    if (software) newFilters.software = software;
-    else delete newFilters.software;
-
-    setFilters(newFilters);
-    fetchLicenses(newFilters);
-  }, [searchTerm, categoria, software, hasImage]);
+    return () => clearTimeout(timeout);
+  }, [fetchLicenses, getCurrentFilters]);
 
   const openModal = (license: DigitalLicense) => {
     setSelectedLicense(license);
+    setShowLicenseKey(false);
     setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false);
+    setShowLicenseKey(false);
     setSelectedLicense(null);
   };
 
+  const handleAdd = () => {
+    setEditingLicense(null);
+    setForm(EMPTY_FORM);
+    setShowFormModal(true);
+  };
+
   const handleEdit = (license: DigitalLicense) => {
-    // Lógica o redirección de edición
-    console.log("Editar licencia:", license.id);
+    setEditingLicense(license);
+    setForm({
+      name: license.name,
+      provider: license.provider,
+      license_type: license.license_type,
+      purchase_date: license.purchase_date ?? "",
+      image: license.image ?? "",
+      price: String(license.price),
+      expiration_date: license.expiration_date ?? "",
+      status: license.status,
+      notes: license.notes ?? "",
+    });
+    setShowFormModal(true);
+  };
+
+  const closeFormModal = () => {
+    setShowFormModal(false);
+    setEditingLicense(null);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleFieldChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
+  ) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }) as LicenseFormState);
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error al subir la imagen");
+      }
+
+      setForm((prev) => ({ ...prev, image: data.data.url }));
+      await Swal.fire({
+        icon: "success",
+        title: "Imagen subida",
+        timer: 1200,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Error al subir la imagen",
+      });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!form.name.trim() || !form.provider.trim() || !form.price) {
+      Swal.fire({
+        icon: "warning",
+        title: "Campos incompletos",
+        text: "Nombre, proveedor y precio son obligatorios",
+      });
+      return;
+    }
+
+    const price = Number(form.price);
+    if (Number.isNaN(price) || price < 0) {
+      Swal.fire({
+        icon: "warning",
+        title: "Precio inválido",
+        text: "El precio debe ser un número mayor o igual a cero",
+      });
+      return;
+    }
+
+    if (price > 1_000_000) {
+      Swal.fire({
+        icon: "warning",
+        title: "Precio inválido",
+        text: "El precio no puede ser mayor a 1,000,000",
+      });
+      return;
+    }
+
+    if (
+      form.purchase_date &&
+      form.expiration_date &&
+      new Date(form.expiration_date) < new Date(form.purchase_date)
+    ) {
+      Swal.fire({
+        icon: "warning",
+        title: "Fechas inválidas",
+        text: "La fecha de expiración no puede ser anterior a la de compra",
+      });
+      return;
+    }
+
+    const payload = {
+      name: form.name.trim(),
+      provider: form.provider.trim(),
+      license_type: form.license_type,
+      purchase_date: form.purchase_date || null,
+      image: form.image.trim() || null,
+      price,
+      expiration_date: form.expiration_date || null,
+      status: form.status,
+      notes: form.notes.trim() || null,
+    };
+
+    setSaving(true);
+    try {
+      const response = await fetch(
+        editingLicense
+          ? `/api/licenses/${editingLicense.id}`
+          : "/api/licenses",
+        {
+          method: editingLicense ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error al guardar la licencia");
+      }
+
+      closeFormModal();
+      await refresh();
+      await Swal.fire({
+        icon: "success",
+        title: editingLicense ? "Licencia actualizada" : "Licencia creada",
+        text: editingLicense
+          ? data.message
+          : `${data.message}. Clave generada: ${data.data.license_key}`,
+        timer: editingLicense ? 1500 : 4000,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Error al guardar la licencia",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (license: DigitalLicense) => {
@@ -124,15 +345,39 @@ export default function CatalogoLicenciasPage() {
       cancelButtonText: "Cancelar",
     });
 
-    if (result.isConfirmed) {
-      // Lógica de eliminación conservando tu estructura
-      console.log("Eliminar licencia:", license.id);
-    }
-  };
+    if (!result.isConfirmed) return;
 
-  const handleAdd = () => {
-    // Lógica o redirección para agregar nueva licencia
-    console.log("Agregar nueva licencia");
+    setDeletingId(license.id);
+    try {
+      const response = await fetch(`/api/licenses/${license.id}`, {
+        method: "DELETE",
+      });
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || "Error al eliminar la licencia");
+      }
+
+      await refresh();
+      await Swal.fire({
+        icon: "success",
+        title: "Licencia eliminada",
+        text: data.message,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Error al eliminar la licencia",
+      });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -219,7 +464,6 @@ export default function CatalogoLicenciasPage() {
               type="button"
               onClick={() => {
                 setSearchTerm("");
-                setFilters({});
                 setCategoria("");
                 setHasImage("");
                 setSoftware("");
@@ -280,18 +524,28 @@ export default function CatalogoLicenciasPage() {
             </p>
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            <table className="w-full table-fixed text-left border-collapse">
+              <colgroup>
+                <col className="w-[7%]" />
+                <col className="w-[21%]" />
+                <col className="w-[15%]" />
+                <col className="w-[11%]" />
+                <col className="w-[11%]" />
+                <col className="w-[10%]" />
+                <col className="w-[10%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <thead>
                 <tr className="sticky top-0 z-10 border-b border-[#DFE3DD] bg-[#EEF2E9] text-xs font-semibold text-[#68716D] uppercase tracking-wider">
-                  <th className="px-6 py-4">Imagen</th>
-                  <th className="px-6 py-4">Nombre</th>
-                  <th className="px-6 py-4">Proveedor</th>
-                  <th className="px-6 py-4">Tipo</th>
-                  <th className="px-6 py-4">Estado</th>
-                  <th className="px-6 py-4">Precio</th>
-                  <th className="px-6 py-4">Expiración</th>
-                  <th className="px-6 py-4 text-center">Acciones</th>
+                  <th className="px-3 py-4">Imagen</th>
+                  <th className="px-3 py-4">Nombre</th>
+                  <th className="px-3 py-4">Proveedor</th>
+                  <th className="px-3 py-4">Tipo</th>
+                  <th className="px-3 py-4">Estado</th>
+                  <th className="px-3 py-4">Precio</th>
+                  <th className="px-3 py-4">Expiración</th>
+                  <th className="px-3 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#DFE3DD] text-sm">
@@ -305,7 +559,7 @@ export default function CatalogoLicenciasPage() {
                     key={license.id}
                     className="hover:bg-[#E7EDE2]/20 transition-colors"
                   >
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4">
                       {license.image ? (
                         <img
                           src={license.image}
@@ -322,15 +576,21 @@ export default function CatalogoLicenciasPage() {
                         </div>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-[#17201D]">
+                    <td
+                      className="truncate px-3 py-4 font-medium text-[#17201D]"
+                      title={license.name}
+                    >
                       {license.name}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-[#68716D]">
+                    <td
+                      className="truncate px-3 py-4 text-[#68716D]"
+                      title={license.provider}
+                    >
                       {license.provider}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4">
                       <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}
+                        className={`inline-block max-w-full truncate px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}
                       >
                         {license.license_type === "perpetual"
                           ? "Permanente"
@@ -339,9 +599,9 @@ export default function CatalogoLicenciasPage() {
                             : "Temporal"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-3 py-4">
                       <span
-                        className={`px-3 py-1 text-xs font-medium rounded-full border ${getStatusColor(license.status)}`}
+                        className={`inline-block max-w-full truncate px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(license.status)}`}
                       >
                         {license.status === "active"
                           ? "Activo"
@@ -352,34 +612,45 @@ export default function CatalogoLicenciasPage() {
                               : "Revocado"}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-medium text-[#17201D]">
+                    <td
+                      className="truncate px-3 py-4 font-medium text-[#17201D]"
+                      title={formatPrice(license.price)}
+                    >
                       {formatPrice(license.price)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-[#68716D]">
+                    <td
+                      className="truncate px-3 py-4 text-[#68716D]"
+                      title={formatDate(license.expiration_date)}
+                    >
                       {formatDate(license.expiration_date)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-3 py-4 text-center">
+                      <div className="flex items-center justify-center gap-1">
                         <button
                           onClick={() => openModal(license)}
                           title="Ver detalles"
-                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B] transition-all"
+                          className="p-1.5 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B] transition-all"
                         >
                           <Eye className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleEdit(license)}
                           title="Editar"
-                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all"
+                          className="p-1.5 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all"
                         >
                           <Edit className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleDelete(license)}
                           title="Eliminar"
-                          className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition-all"
+                          disabled={deletingId === license.id}
+                          className="p-1.5 rounded-lg bg-red-100 text-red-600 hover:bg-red-500 hover:text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          {deletingId === license.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
                         </button>
                       </div>
                     </td>
@@ -390,6 +661,248 @@ export default function CatalogoLicenciasPage() {
           </div>
         )}
       </div>
+
+      {/* Modal de Crear / Editar */}
+      {showFormModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div
+              className="fixed inset-0 transition-opacity bg-[#17201D]/50 backdrop-blur-sm"
+              onClick={() => {
+                if (!saving) closeFormModal();
+              }}
+            ></div>
+
+            <div className="inline-block align-bottom bg-[#FBFCF8] rounded-2xl text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-3xl sm:w-full border border-[#DFE3DD] relative z-10">
+              <div className="px-6 py-4 border-b border-[#DFE3DD] flex items-center justify-between bg-[#E7EDE2]/50">
+                <h3 className="text-lg font-semibold text-[#17201D]">
+                  {editingLicense ? "Editar Licencia" : "Nueva Licencia"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeFormModal}
+                  disabled={saving}
+                  className="text-[#68716D] hover:text-[#17201D] transition-colors disabled:opacity-50"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="px-6 py-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="name" className={labelClass}>
+                        Nombre *
+                      </label>
+                      <input
+                        id="name"
+                        name="name"
+                        type="text"
+                        required
+                        value={form.name}
+                        onChange={handleFieldChange}
+                        placeholder="Ej. JetBrains All Products Pack"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="provider" className={labelClass}>
+                        Proveedor *
+                      </label>
+                      <input
+                        id="provider"
+                        name="provider"
+                        type="text"
+                        required
+                        value={form.provider}
+                        onChange={handleFieldChange}
+                        placeholder="Ej. JetBrains s.r.o."
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="license_type" className={labelClass}>
+                        Tipo de licencia *
+                      </label>
+                      <select
+                        id="license_type"
+                        name="license_type"
+                        value={form.license_type}
+                        onChange={handleFieldChange}
+                        className={inputClass}
+                      >
+                        <option value="perpetual">Permanente</option>
+                        <option value="subscription">Suscripción</option>
+                        <option value="temporary">Temporal</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="status" className={labelClass}>
+                        Estado
+                      </label>
+                      <select
+                        id="status"
+                        name="status"
+                        value={form.status}
+                        onChange={handleFieldChange}
+                        className={inputClass}
+                      >
+                        <option value="active">Activo</option>
+                        <option value="expired">Expirado</option>
+                        <option value="suspended">Suspendido</option>
+                        <option value="revoked">Revocado</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="price" className={labelClass}>
+                        Precio (USD) *
+                      </label>
+                      <input
+                        id="price"
+                        name="price"
+                        type="number"
+                        min="0"
+                        max="1000000"
+                        step="0.01"
+                        required
+                        value={form.price}
+                        onChange={handleFieldChange}
+                        placeholder="0.00"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="flex items-center rounded-xl border border-[#DFE3DD] bg-[#E7EDE2]/50 px-4 py-2.5 text-sm text-[#68716D]">
+                      La clave de licencia se genera automáticamente y es
+                      única.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="purchase_date" className={labelClass}>
+                        Fecha de compra
+                      </label>
+                      <input
+                        id="purchase_date"
+                        name="purchase_date"
+                        type="date"
+                        value={form.purchase_date}
+                        onChange={handleFieldChange}
+                        className={inputClass}
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="expiration_date" className={labelClass}>
+                        Fecha de expiración
+                      </label>
+                      <input
+                        id="expiration_date"
+                        name="expiration_date"
+                        type="date"
+                        value={form.expiration_date}
+                        onChange={handleFieldChange}
+                        className={inputClass}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="image" className={labelClass}>
+                      Imagen
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <input
+                        id="image"
+                        name="image"
+                        type="url"
+                        value={form.image}
+                        onChange={handleFieldChange}
+                        placeholder="https://... o sube un archivo"
+                        className={inputClass}
+                      />
+                      <label
+                        className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-medium text-sm whitespace-nowrap cursor-pointer transition-all ${
+                          uploading
+                            ? "bg-[#E7EDE2] text-[#859087] cursor-not-allowed"
+                            : "bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B]"
+                        }`}
+                      >
+                        {uploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                        {uploading ? "Subiendo..." : "Subir imagen"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={uploading}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {form.image && (
+                      <div className="mt-3 h-32 w-full bg-[#F5F5F0] rounded-xl overflow-hidden border border-[#DFE3DD]">
+                        <img
+                          src={form.image}
+                          alt="Vista previa"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="notes" className={labelClass}>
+                      Notas
+                    </label>
+                    <textarea
+                      id="notes"
+                      name="notes"
+                      rows={3}
+                      value={form.notes}
+                      onChange={handleFieldChange}
+                      placeholder="Información adicional sobre la licencia..."
+                      className={`${inputClass} resize-none`}
+                    />
+                  </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-[#DFE3DD] flex justify-end gap-3 bg-[#E7EDE2]/50">
+                  <button
+                    type="button"
+                    onClick={closeFormModal}
+                    disabled={saving}
+                    className="px-5 py-2.5 bg-transparent border border-[#DFE3DD] text-[#17201D] rounded-xl hover:bg-[#E7EDE2] transition-colors font-medium text-sm disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || uploading}
+                    className="px-5 py-2.5 bg-[#D7ED4B] text-[#17201D] rounded-xl hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-colors font-semibold text-sm disabled:cursor-not-allowed disabled:opacity-50 inline-flex items-center gap-2"
+                  >
+                    {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                    {saving
+                      ? "Guardando..."
+                      : editingLicense
+                        ? "Guardar cambios"
+                        : "Crear licencia"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Detalles */}
       {showModal && selectedLicense && (
@@ -516,9 +1029,38 @@ export default function CatalogoLicenciasPage() {
                     <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
                       Clave de Licencia
                     </label>
-                    <p className="text-[#17201D] mt-1 font-mono text-sm bg-[#F5F5F0] border border-[#DFE3DD] px-3 py-1.5 rounded-lg break-all">
-                      {selectedLicense.license_key || "N/A"}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="flex-1 text-[#17201D] font-mono text-sm bg-[#F5F5F0] border border-[#DFE3DD] px-3 py-1.5 rounded-lg break-all">
+                        {selectedLicense.license_key
+                          ? showLicenseKey
+                            ? selectedLicense.license_key
+                            : "•••• •••• •••• ••••"
+                          : "N/A"}
+                      </p>
+                      {selectedLicense.license_key && (
+                        <button
+                          type="button"
+                          onClick={() => setShowLicenseKey((prev) => !prev)}
+                          title={
+                            showLicenseKey
+                              ? "Ocultar clave de licencia"
+                              : "Mostrar clave de licencia"
+                          }
+                          aria-label={
+                            showLicenseKey
+                              ? "Ocultar clave de licencia"
+                              : "Mostrar clave de licencia"
+                          }
+                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B] transition-all shrink-0"
+                        >
+                          {showLicenseKey ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
