@@ -7,6 +7,7 @@ import {
   LicenseStatus,
   LicenseType,
 } from "@/src/type";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   Search,
@@ -54,6 +55,7 @@ const labelClass =
   "block text-xs text-[#859087] uppercase tracking-wider font-semibold mb-1";
 
 export default function CatalogoLicenciasPage() {
+  const router = useRouter();
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -93,6 +95,10 @@ export default function CatalogoLicenciasPage() {
 
       const url = `/api/licenses${queryParams.toString() ? `?${queryParams.toString()}` : ""}`;
       const response = await fetch(url);
+      if (response.status === 401) {
+        router.push("/login");
+        return;
+      }
       const data = await response.json();
 
       if (data.success) {
@@ -114,7 +120,7 @@ export default function CatalogoLicenciasPage() {
       setLoading(false);
     }
     },
-    [],
+    [router],
   );
 
   const getCurrentFilters = useCallback((): CatalogFilters => {

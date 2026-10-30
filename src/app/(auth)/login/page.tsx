@@ -36,8 +36,8 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        // El token viaja en una cookie httpOnly; aquí solo se guardan los datos para mostrar en la UI
         if (typeof window !== "undefined") {
-          localStorage.setItem("token", data.data.token);
           localStorage.setItem("employee", JSON.stringify(data.data.employee));
         }
 

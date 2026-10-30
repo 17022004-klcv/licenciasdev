@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { employeeService } from "@/service/auth.service";
+import { requireAuth } from "@/lib/auth";
 
 interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const employeeId = Number(id);
@@ -30,6 +34,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const employeeId = Number(id);
@@ -39,6 +46,13 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
 
     const body = await req.json();
+    if (employeeId === auth.user.id && (body.is_active === false || (body.role && body.role !== "administrator"))) {
+      return NextResponse.json(
+        { success: false, error: "No puedes desactivar ni quitar el rol de administrador a tu propia cuenta" },
+        { status: 400 }
+      );
+    }
+
     const updated = await employeeService.update(employeeId, body);
 
     return NextResponse.json({
@@ -53,13 +67,20 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const employeeId = Number(id);
 
     if (isNaN(employeeId)) {
       return NextResponse.json({ success: false, error: "ID inválido" }, { status: 400 });
+    }
+
+    if (employeeId === auth.user.id) {
+      return NextResponse.json({ success: false, error: "No puedes eliminar tu propia cuenta" }, { status: 400 });
     }
 
     const deleted = employeeService.delete(employeeId);

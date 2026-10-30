@@ -5,6 +5,7 @@ import {
   CreateLicenseDTO,
   UpdateLicenseDTO,
   LicenseFilterParams,
+  PublicLicense,
 } from "@/src/type";
 
 const MAX_PRICE = 1_000_000;
@@ -83,6 +84,20 @@ export const licenseService = {
     const rows = stmt.all(...params) as unknown as DigitalLicense[];
 
     return rows.map(formatLicense);
+  },
+
+  // Catálogo para clientes: solo licencias activas y sin datos sensibles
+  getPublic(): PublicLicense[] {
+    return this.getAll({ status: "active" }).map((license) => ({
+      id: license.id,
+      name: license.name,
+      provider: license.provider,
+      license_type: license.license_type,
+      image: license.image,
+      price: license.price,
+      expiration_date: license.expiration_date,
+      notes: license.notes,
+    }));
   },
 
   getById(id: number): DigitalLicense | null {

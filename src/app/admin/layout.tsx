@@ -1,4 +1,5 @@
-import Sidebar from "@/src/components/sidebar"; // Ajusta la ruta de importación según dónde tengas guaradado tu componente Sidebar
+import Sidebar from "@/src/components/sidebar";
+import SessionProvider from "@/src/components/session";
 
 export default function AdminLayout({
   children,
@@ -6,12 +7,14 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-dvh overflow-hidden bg-[#F5F5F0]">
-      {/* Sidebar fijo a la izquierda */}
-      <Sidebar />
+    <SessionProvider>
+      <div className="flex h-dvh overflow-hidden bg-[#F5F5F0]">
+        {/* Sidebar fijo a la izquierda */}
+        <Sidebar />
 
-      {/* Contenido principal de las páginas del admin */}
-      <main className="flex-1 overflow-hidden">{children}</main>
-    </div>
+        {/* Contenido principal de las páginas del admin */}
+        <main className="flex-1 overflow-hidden">{children}</main>
+      </div>
+    </SessionProvider>
   );
 }

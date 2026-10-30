@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { licenseService } from "@/service/license.service";
+import { requireAuth } from "@/lib/auth";
 
 interface Params {
   params: Promise<{ id: string }>;
 }
 
-export async function GET(_req: NextRequest, { params }: Params) {
+export async function GET(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const licenseId = Number(id);
@@ -30,6 +34,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const licenseId = Number(id);
@@ -53,7 +60,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: Params) {
+export async function DELETE(req: NextRequest, { params }: Params) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const { id } = await params;
     const licenseId = Number(id);

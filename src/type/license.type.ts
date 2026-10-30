@@ -17,6 +17,12 @@ export interface DigitalLicense {
   updated_at: string;
 }
 
+// Datos de una licencia que se pueden mostrar a clientes sin sesión (sin license_key)
+export type PublicLicense = Pick<
+  DigitalLicense,
+  "id" | "name" | "provider" | "license_type" | "image" | "price" | "expiration_date" | "notes"
+>;
+
 export interface LicenseFilterParams {
   name?: string;
   provider?: string;

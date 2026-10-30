@@ -7,6 +7,8 @@ function seed() {
 
   // Clear existing data for fresh test run
   db.exec(`
+    DELETE FROM sale_items;
+    DELETE FROM sales;
     DELETE FROM digital_licenses;
     DELETE FROM employees;
   `);
