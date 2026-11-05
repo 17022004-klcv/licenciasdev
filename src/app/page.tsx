@@ -35,7 +35,7 @@ export default function Home() {
   const [licenses, setLicenses] = useState<PublicLicense[]>([]);
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<LicenseType | "">("");
-  const [selected, setSelected] = useState<DigitalLicense | null>(null);
+  const [selected, setSelected] = useState<DigitalLicense | PublicLicense | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paid, setPaid] = useState(false);
