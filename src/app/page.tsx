@@ -18,7 +18,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type { DigitalLicense } from "@/src/type";
+import type { DigitalLicense, LicenseType } from "@/src/type";
 
 const typeLabels = {
   perpetual: "Permanente",
@@ -34,6 +34,7 @@ const formatPrice = (price: number) =>
 export default function Home() {
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [search, setSearch] = useState("");
+  const [selectedType, setSelectedType] = useState<LicenseType | "">("");
   const [selected, setSelected] = useState<DigitalLicense | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -56,14 +57,18 @@ export default function Home() {
 
   const visibleLicenses = useMemo(() => {
     const term = search.trim().toLowerCase();
-    return licenses.filter(
-      (license) =>
+    return licenses.filter((license) => {
+      const matchesType =
+        !selectedType || license.license_type === selectedType;
+      const matchesSearch =
         !term ||
         `${license.name} ${license.provider} ${license.notes || ""}`
           .toLowerCase()
-          .includes(term),
-    );
-  }, [licenses, search]);
+          .includes(term);
+
+      return matchesType && matchesSearch;
+    });
+  }, [licenses, search, selectedType]);
 
   const scrollToCatalog = () =>
     document.getElementById("catalogo")?.scrollIntoView({ behavior: "smooth" });
@@ -188,13 +193,31 @@ export default function Home() {
           </p>
         </div>
         <div className="catalog-toolbar">
-          <div className="search-box">
-            <Search size={17} />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por nombre o proveedor"
-            />
+          <div className="catalog-filters">
+            <div className="search-box">
+              <Search size={17} />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre o proveedor"
+              />
+            </div>
+            <label className="category-select">
+              <span className="sr-only">Filtrar por categoría</span>
+              <select
+                value={selectedType}
+                onChange={(event) =>
+                  setSelectedType(event.target.value as LicenseType | "")
+                }
+                aria-label="Filtrar por categoría"
+              >
+                <option value="">Todas las categorías</option>
+                <option value="perpetual">{typeLabels.perpetual}</option>
+                <option value="subscription">{typeLabels.subscription}</option>
+                <option value="temporary">{typeLabels.temporary}</option>
+              </select>
+              <ChevronDown size={15} aria-hidden="true" />
+            </label>
           </div>
           <span>{visibleLicenses.length} disponibles</span>
         </div>
