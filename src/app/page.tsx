@@ -18,7 +18,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type { DigitalLicense, LicenseType } from "@/src/type";
+import type { DigitalLicense, LicenseType, PublicLicense } from "@/src/type";
 
 const typeLabels = {
   perpetual: "Permanente",
