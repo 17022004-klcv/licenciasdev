@@ -32,7 +32,7 @@ const formatPrice = (price: number) =>
   );
 
 export default function Home() {
-  const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
+  const [licenses, setLicenses] = useState<PublicLicense[]>([]);
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<LicenseType | "">("");
   const [selected, setSelected] = useState<DigitalLicense | null>(null);
@@ -43,7 +43,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/licenses?status=active")
+    fetch("/api/public/licenses")
       .then((response) => response.json())
       .then((data) => {
         setLicenses(data.success ? data.data : []);

@@ -2,11 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import crypto from "crypto";
+import { requireAuth } from "@/lib/auth";
 
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export async function POST(req: NextRequest) {
+  const auth = requireAuth(req, ["administrator"]);
+  if (!auth.ok) return auth.response;
+
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;

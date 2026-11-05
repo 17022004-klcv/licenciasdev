@@ -2,13 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, FileText, ShoppingCart, LogOut } from "lucide-react";
+import { Home, FileText, ShoppingCart, Receipt, LogOut } from "lucide-react";
 import Swal from "sweetalert2";
 import { useRouter } from "next/navigation";
+import { useSession } from "@/src/components/session";
+
+const ROLE_LABELS: Record<string, string> = {
+  administrator: "Administrador",
+  employee: "Empleado",
+};
 
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const user = useSession();
 
   const handleLogout = async () => {
     const result = await Swal.fire({
@@ -23,18 +30,21 @@ export default function Sidebar() {
     });
 
     if (result.isConfirmed) {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("token");
+      try {
+        // Borra la cookie httpOnly de sesión; localStorage solo guarda datos de UI
+        await fetch("/api/auth/logout", { method: "POST" });
+      } finally {
         localStorage.removeItem("employee");
+        router.push("/");
       }
-      router.push("/");
     }
   };
 
   const navItems = [
-    { name: "Inicio", href: "/admin/", icon: Home },
+    { name: "Inicio", href: "/admin", icon: Home },
     { name: "Catálogo", href: "/admin/catalogo", icon: FileText },
     { name: "POS", href: "/admin/pos", icon: ShoppingCart },
+    { name: "Historial de Ventas", href: "/admin/ventas", icon: Receipt },
   ];
 
   return (
@@ -78,7 +88,13 @@ export default function Sidebar() {
       </nav>
 
       {/* Botón de cerrar sesión inferior */}
-      <div className="pt-4 border-t border-[#DFE3DD]/10">
+      <div className="pt-4 border-t border-[#DFE3DD]/10 space-y-2">
+        <div className="px-4 py-2">
+          <p className="text-sm font-semibold text-[#F5F5F0] truncate">
+            {user ? `${user.first_name} ${user.last_name}` : "Cargando..."}
+          </p>
+          <p className="text-xs text-[#859087]">{user ? ROLE_LABELS[user.role] ?? user.role : ""}</p>
+        </div>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-[#859087] hover:bg-red-500/10 hover:text-red-400 transition-all"

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authService } from "@/service/auth.service";
+import { AUTH_COOKIE, JWT_EXPIRES_IN_SECONDS } from "@/lib/jwt";
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,12 +15,12 @@ export async function POST(req: NextRequest) {
       data: result,
     });
 
-    response.cookies.set("licencias_token", result.token, {
+    response.cookies.set(AUTH_COOKIE, result.token, {
       httpOnly: true,
-      sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      maxAge: 60 * 60 * 24,
+      sameSite: "lax",
       path: "/",
+      maxAge: JWT_EXPIRES_IN_SECONDS,
     });
 
     return response;
