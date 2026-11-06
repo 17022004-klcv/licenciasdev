@@ -72,5 +72,25 @@ export function getDb(): DatabaseSync {
       WHERE license_key IS NOT NULL;
   `);
 
+  // --- AUTO-SEED: Verificar e insertar datos iniciales si está vacía ---
+  try {
+    const row = dbInstance.prepare("SELECT COUNT(*) as count FROM employees").get() as { count: number };
+    
+    if (row.count === 0) {
+      console.log("⚠️ Base de datos vacía detectada. Insertando usuario administrador inicial...");
+      
+      // NOTA: Reemplaza este 'password_hash' por el hash real que uses en tu app (ej. generado con bcrypt)
+      // O el texto plano si tu app los guarda así temporalmente para pruebas.
+      dbInstance.prepare(`
+        INSERT INTO employees (first_name, last_name, email, password_hash, role)
+        VALUES (?, ?, ?, ?, ?)
+      `).run("Admin", "Licensia", "admin@licensia.com", "tu_hash_de_contrasena_aqui", "administrator");
+
+      console.log("✅ Administrador por defecto creado exitosamente.");
+    }
+  } catch (error) {
+    console.error("Error al ejecutar el auto-seed en la base de datos:", error);
+  }
+
   return dbInstance;
 }
