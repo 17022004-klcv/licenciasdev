@@ -18,7 +18,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type { DigitalLicense, LicenseType, PublicLicense } from "@/src/type";
+import type { DigitalLicense, LicenseType } from "@/src/type";
 
 const typeLabels = {
   perpetual: "Permanente",
@@ -32,10 +32,10 @@ const formatPrice = (price: number) =>
   );
 
 export default function Home() {
-  const [licenses, setLicenses] = useState<PublicLicense[]>([]);
+  const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<LicenseType | "">("");
-  const [selected, setSelected] = useState<DigitalLicense | PublicLicense | null>(null);
+  const [selected, setSelected] = useState<DigitalLicense | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paid, setPaid] = useState(false);
