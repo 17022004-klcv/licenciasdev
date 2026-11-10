@@ -24,7 +24,7 @@ import {
 import Swal from "sweetalert2";
 
 type CatalogFilters = LicenseFilterParams & { software?: string };
-
+// Estado del formulario para crear/editar licencias
 interface LicenseFormState {
   name: string;
   provider: string;
