@@ -6,6 +6,8 @@ import {
   LicenseFilterParams,
   LicenseStatus,
   LicenseType,
+  LICENSE_TYPES,
+  LICENSE_TYPE_LABELS,
 } from "@/src/type";
 import { useRouter } from "next/navigation";
 import {
@@ -29,10 +31,8 @@ interface LicenseFormState {
   name: string;
   provider: string;
   license_type: LicenseType;
-  purchase_date: string;
   image: string;
   price: string;
-  expiration_date: string;
   status: LicenseStatus;
   notes: string;
 }
@@ -40,11 +40,9 @@ interface LicenseFormState {
 const EMPTY_FORM: LicenseFormState = {
   name: "",
   provider: "",
-  license_type: "subscription",
-  purchase_date: "",
+  license_type: "1_year",
   image: "",
   price: "",
-  expiration_date: "",
   status: "active",
   notes: "",
 };
@@ -169,10 +167,8 @@ export default function CatalogoLicenciasPage() {
       name: license.name,
       provider: license.provider,
       license_type: license.license_type,
-      purchase_date: license.purchase_date ?? "",
       image: license.image ?? "",
       price: String(license.price),
-      expiration_date: license.expiration_date ?? "",
       status: license.status,
       notes: license.notes ?? "",
     });
@@ -265,27 +261,12 @@ export default function CatalogoLicenciasPage() {
       return;
     }
 
-    if (
-      form.purchase_date &&
-      form.expiration_date &&
-      new Date(form.expiration_date) < new Date(form.purchase_date)
-    ) {
-      Swal.fire({
-        icon: "warning",
-        title: "Fechas inválidas",
-        text: "La fecha de expiración no puede ser anterior a la de compra",
-      });
-      return;
-    }
-
     const payload = {
       name: form.name.trim(),
       provider: form.provider.trim(),
       license_type: form.license_type,
-      purchase_date: form.purchase_date || null,
       image: form.image.trim() || null,
       price,
-      expiration_date: form.expiration_date || null,
       status: form.status,
       notes: form.notes.trim() || null,
     };
@@ -397,20 +378,15 @@ export default function CatalogoLicenciasPage() {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "perpetual":
+      case "indefinite":
         return "bg-[#E7EDE2] text-[#17201D] border-[#DFE3DD]";
-      case "subscription":
+      case "1_year":
         return "bg-[#D7ED4B]/30 text-[#17201D] border-[#91A91C]/40";
-      case "temporary":
+      case "6_months":
         return "bg-[#91A91C]/20 text-[#17201D] border-[#91A91C]/30";
       default:
         return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
     }
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES");
   };
 
   const formatPrice = (price: number) => {
@@ -482,10 +458,12 @@ export default function CatalogoLicenciasPage() {
               onChange={(e) => setCategoria(e.target.value)}
               className="px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C]"
             >
-              <option value="">Todas las categorías</option>
-              <option value="perpetual">Permanente</option>
-              <option value="subscription">Suscripción</option>
-              <option value="temporary">Temporal</option>
+              <option value="">Todas las duraciones</option>
+              {LICENSE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {LICENSE_TYPE_LABELS[type]}
+                </option>
+              ))}
             </select>
             <select
               value={hasImage}
@@ -528,23 +506,21 @@ export default function CatalogoLicenciasPage() {
             <table className="w-full table-fixed text-left border-collapse">
               <colgroup>
                 <col className="w-[7%]" />
-                <col className="w-[21%]" />
-                <col className="w-[15%]" />
+                <col className="w-[24%]" />
+                <col className="w-[17%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
                 <col className="w-[11%]" />
-                <col className="w-[11%]" />
-                <col className="w-[10%]" />
-                <col className="w-[10%]" />
-                <col className="w-[15%]" />
+                <col className="w-[17%]" />
               </colgroup>
               <thead>
                 <tr className="sticky top-0 z-10 border-b border-[#DFE3DD] bg-[#EEF2E9] text-xs font-semibold text-[#68716D] uppercase tracking-wider">
                   <th className="px-3 py-4">Imagen</th>
                   <th className="px-3 py-4">Nombre</th>
                   <th className="px-3 py-4">Proveedor</th>
-                  <th className="px-3 py-4">Tipo</th>
+                  <th className="px-3 py-4">Duración</th>
                   <th className="px-3 py-4">Estado</th>
                   <th className="px-3 py-4">Precio</th>
-                  <th className="px-3 py-4">Expiración</th>
                   <th className="px-3 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -592,11 +568,7 @@ export default function CatalogoLicenciasPage() {
                       <span
                         className={`inline-block max-w-full truncate px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}
                       >
-                        {license.license_type === "perpetual"
-                          ? "Permanente"
-                          : license.license_type === "subscription"
-                            ? "Suscripción"
-                            : "Temporal"}
+                        {LICENSE_TYPE_LABELS[license.license_type]}
                       </span>
                     </td>
                     <td className="px-3 py-4">
@@ -617,12 +589,6 @@ export default function CatalogoLicenciasPage() {
                       title={formatPrice(license.price)}
                     >
                       {formatPrice(license.price)}
-                    </td>
-                    <td
-                      className="truncate px-3 py-4 text-[#68716D]"
-                      title={formatDate(license.expiration_date)}
-                    >
-                      {formatDate(license.expiration_date)}
                     </td>
                     <td className="px-3 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -726,7 +692,7 @@ export default function CatalogoLicenciasPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="license_type" className={labelClass}>
-                        Tipo de licencia *
+                        Duración *
                       </label>
                       <select
                         id="license_type"
@@ -735,9 +701,11 @@ export default function CatalogoLicenciasPage() {
                         onChange={handleFieldChange}
                         className={inputClass}
                       >
-                        <option value="perpetual">Permanente</option>
-                        <option value="subscription">Suscripción</option>
-                        <option value="temporary">Temporal</option>
+                        {LICENSE_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {LICENSE_TYPE_LABELS[type]}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -779,37 +747,8 @@ export default function CatalogoLicenciasPage() {
                       />
                     </div>
                     <div className="flex items-center rounded-xl border border-[#DFE3DD] bg-[#E7EDE2]/50 px-4 py-2.5 text-sm text-[#68716D]">
-                      La clave de licencia se genera automáticamente y es
-                      única.
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="purchase_date" className={labelClass}>
-                        Fecha de compra
-                      </label>
-                      <input
-                        id="purchase_date"
-                        name="purchase_date"
-                        type="date"
-                        value={form.purchase_date}
-                        onChange={handleFieldChange}
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="expiration_date" className={labelClass}>
-                        Fecha de expiración
-                      </label>
-                      <input
-                        id="expiration_date"
-                        name="expiration_date"
-                        type="date"
-                        value={form.expiration_date}
-                        onChange={handleFieldChange}
-                        className={inputClass}
-                      />
+                      La clave se genera automáticamente. La fecha de
+                      expiración se calcula al vender según la duración.
                     </div>
                   </div>
 
@@ -963,17 +902,13 @@ export default function CatalogoLicenciasPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Tipo de Licencia
+                      Duración
                     </label>
                     <div className="mt-1">
                       <span
                         className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor(selectedLicense.license_type)}`}
                       >
-                        {selectedLicense.license_type === "perpetual"
-                          ? "Permanente"
-                          : selectedLicense.license_type === "subscription"
-                            ? "Suscripción"
-                            : "Temporal"}
+                        {LICENSE_TYPE_LABELS[selectedLicense.license_type]}
                       </span>
                     </div>
                   </div>
@@ -1004,25 +939,6 @@ export default function CatalogoLicenciasPage() {
                     </label>
                     <p className="text-[#17201D] mt-1 font-medium">
                       {formatPrice(selectedLicense.price)}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Fecha de Compra
-                    </label>
-                    <p className="text-[#68716D] mt-1">
-                      {formatDate(selectedLicense.purchase_date)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Fecha de Expiración
-                    </label>
-                    <p className="text-[#68716D] mt-1">
-                      {formatDate(selectedLicense.expiration_date)}
                     </p>
                   </div>
                   <div>

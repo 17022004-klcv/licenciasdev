@@ -31,11 +31,9 @@ function seed() {
       name: "JetBrains All Products Pack",
       provider: "JetBrains s.r.o.",
       license_key: "JB-98321-47291-ZX",
-      license_type: "subscription",
-      purchase_date: "2026-01-15",
+      license_type: "1_year",
       image: "https://resources.jetbrains.com/storage/products/company/brand/logos/jb_beam.png",
       price: 289.0,
-      expiration_date: "2027-01-15",
       status: "active",
       notes: "Licencia de desarrollo corporativa anual",
     },
@@ -43,11 +41,9 @@ function seed() {
       name: "Microsoft 365 Business Standard",
       provider: "Microsoft Corporation",
       license_key: "MSFT-O365-8831-ABCD",
-      license_type: "subscription",
-      purchase_date: "2025-11-01",
+      license_type: "1_year",
       image: "https://upload.wikimedia.org/wikipedia/commons/5/5f/Microsoft_Office_logo_%282019%E2%80%93present%29.svg",
       price: 150.0,
-      expiration_date: "2026-11-01",
       status: "active",
       notes: "Paquete ofimática asignado a equipo de administración",
     },
@@ -55,11 +51,9 @@ function seed() {
       name: "Adobe Creative Cloud Pro",
       provider: "Adobe Inc.",
       license_key: "ADOBE-CC-9921-PQRS",
-      license_type: "subscription",
-      purchase_date: "2025-05-10",
+      license_type: "1_year",
       image: "https://upload.wikimedia.org/wikipedia/commons/a/ac/Creative_Cloud.svg",
       price: 599.88,
-      expiration_date: "2026-05-10",
       status: "active",
       notes: "Licencia de diseño gráfico y multimedios",
     },
@@ -67,11 +61,9 @@ function seed() {
       name: "WinRAR Enterprise Perpetual",
       provider: "win.rar GmbH",
       license_key: "RAR-PERPETUAL-5521",
-      license_type: "perpetual",
-      purchase_date: "2024-03-20",
+      license_type: "indefinite",
       image: null,
       price: 49.99,
-      expiration_date: null,
       status: "active",
       notes: "Licencia permanente sin fecha de vencimiento",
     },
@@ -79,19 +71,17 @@ function seed() {
       name: "Tableau Desktop Trial/Temporary",
       provider: "Salesforce / Tableau",
       license_key: null,
-      license_type: "temporary",
-      purchase_date: "2026-02-01",
+      license_type: "6_months",
       image: null,
       price: 0.0,
-      expiration_date: "2026-03-01",
       status: "expired",
       notes: "Licencia de evaluación temporal vencida",
     },
   ];
 
   const insertLic = db.prepare(`
-    INSERT INTO digital_licenses (name, provider, license_key, license_type, purchase_date, image, price, expiration_date, status, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO digital_licenses (name, provider, license_key, license_type, image, price, status, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const lic of licenses) {
@@ -100,10 +90,8 @@ function seed() {
       lic.provider,
       lic.license_key,
       lic.license_type,
-      lic.purchase_date,
       lic.image,
       lic.price,
-      lic.expiration_date,
       lic.status,
       lic.notes
     );

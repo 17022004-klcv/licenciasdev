@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DigitalLicense, LicenseType, Sale } from "@/src/type";
+import { DigitalLicense, LicenseType, LICENSE_TYPES, LICENSE_TYPE_LABELS, Sale } from "@/src/type";
 import { CreditCard, FileText, Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -10,12 +10,6 @@ interface CartItem {
   license: DigitalLicense;
   quantity: number;
 }
-
-const TYPE_LABELS: Record<LicenseType, string> = {
-  perpetual: "Permanente",
-  subscription: "Suscripción",
-  temporary: "Temporal",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Activo",
@@ -26,11 +20,11 @@ const STATUS_LABELS: Record<string, string> = {
 
 const getTypeColor = (type: string) => {
   switch (type) {
-    case "perpetual":
+    case "indefinite":
       return "bg-[#E7EDE2] text-[#17201D] border-[#DFE3DD]";
-    case "subscription":
+    case "1_year":
       return "bg-[#D7ED4B]/30 text-[#17201D] border-[#91A91C]/40";
-    case "temporary":
+    case "6_months":
       return "bg-[#91A91C]/20 text-[#17201D] border-[#91A91C]/30";
     default:
       return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
@@ -231,7 +225,7 @@ export default function PosPage() {
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                {(["", "perpetual", "subscription", "temporary"] as const).map((type) => (
+                {(["", ...LICENSE_TYPES] as const).map((type) => (
                   <button
                     key={type || "all"}
                     onClick={() => setTypeFilter(type)}
@@ -241,7 +235,7 @@ export default function PosPage() {
                         : "border-[#DFE3DD] text-[#68716D] hover:bg-[#E7EDE2]"
                     }`}
                   >
-                    {type ? TYPE_LABELS[type] : "Todas"}
+                    {type ? LICENSE_TYPE_LABELS[type] : "Todas"}
                   </button>
                 ))}
               </div>
@@ -293,7 +287,7 @@ export default function PosPage() {
 
                       <div className="flex flex-wrap gap-2 mb-4">
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}>
-                          {TYPE_LABELS[license.license_type]}
+                          {LICENSE_TYPE_LABELS[license.license_type]}
                         </span>
                         {!available && (
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-red-500/20 text-red-700 border-red-500/30">

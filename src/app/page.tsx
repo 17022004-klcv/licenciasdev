@@ -18,13 +18,12 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import type { DigitalLicense, LicenseType } from "@/src/type";
-
-const typeLabels = {
-  perpetual: "Permanente",
-  subscription: "Suscripción",
-  temporary: "Temporal",
-};
+import {
+  LICENSE_TYPES,
+  LICENSE_TYPE_LABELS,
+  type LicenseType,
+  type PublicLicense,
+} from "@/src/type";
 
 const formatPrice = (price: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "USD" }).format(
@@ -32,10 +31,10 @@ const formatPrice = (price: number) =>
   );
 
 export default function Home() {
-  const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
+  const [licenses, setLicenses] = useState<PublicLicense[]>([]);
   const [search, setSearch] = useState("");
   const [selectedType, setSelectedType] = useState<LicenseType | "">("");
-  const [selected, setSelected] = useState<DigitalLicense | null>(null);
+  const [selected, setSelected] = useState<PublicLicense | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paid, setPaid] = useState(false);
@@ -203,18 +202,20 @@ export default function Home() {
               />
             </div>
             <label className="category-select">
-              <span className="sr-only">Filtrar por categoría</span>
+              <span className="sr-only">Filtrar por duración</span>
               <select
                 value={selectedType}
                 onChange={(event) =>
                   setSelectedType(event.target.value as LicenseType | "")
                 }
-                aria-label="Filtrar por categoría"
+                aria-label="Filtrar por duración"
               >
-                <option value="">Todas las categorías</option>
-                <option value="perpetual">{typeLabels.perpetual}</option>
-                <option value="subscription">{typeLabels.subscription}</option>
-                <option value="temporary">{typeLabels.temporary}</option>
+                <option value="">Todas las duraciones</option>
+                {LICENSE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {LICENSE_TYPE_LABELS[type]}
+                  </option>
+                ))}
               </select>
               <ChevronDown size={15} aria-hidden="true" />
             </label>
@@ -237,7 +238,7 @@ export default function Home() {
                     </div>
                   )}
                   <span className="type-label">
-                    {typeLabels[license.license_type]}
+                    {LICENSE_TYPE_LABELS[license.license_type]}
                   </span>
                 </div>
                 <div className="license-content">
@@ -245,9 +246,9 @@ export default function Home() {
                   <h3>{license.name}</h3>
                   <div className="license-meta">
                     <span>
-                      {license.license_type === "perpetual"
-                        ? "Pago único"
-                        : "Acceso flexible"}
+                      {license.license_type === "indefinite"
+                        ? "Pago único, sin vencimiento"
+                        : `Vigencia de ${LICENSE_TYPE_LABELS[license.license_type]}`}
                     </span>
                     <strong>{formatPrice(license.price)}</strong>
                   </div>

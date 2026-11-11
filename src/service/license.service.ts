@@ -6,9 +6,17 @@ import {
   UpdateLicenseDTO,
   LicenseFilterParams,
   PublicLicense,
+  LICENSE_TYPES,
+  LicenseType,
 } from "@/src/type";
 
 const MAX_PRICE = 1_000_000;
+
+function assertValidType(type: unknown): asserts type is LicenseType {
+  if (!LICENSE_TYPES.includes(type as LicenseType)) {
+    throw new Error(`Tipo de licencia inválido. Valores permitidos: ${LICENSE_TYPES.join(", ")}`);
+  }
+}
 
 function formatLicense(license: DigitalLicense): DigitalLicense {
   return {
@@ -92,7 +100,6 @@ export const licenseService = {
       license_type: license.license_type,
       image: license.image,
       price: license.price,
-      expiration_date: license.expiration_date,
       notes: license.notes,
     }));
   },
@@ -108,10 +115,8 @@ export const licenseService = {
       name,
       provider,
       license_type,
-      purchase_date = null,
       image = null,
       price,
-      expiration_date = null,
       status = "active",
       notes = null,
     } = data;
@@ -119,6 +124,8 @@ export const licenseService = {
     if (!name || !provider || !license_type || price === undefined || price === null) {
       throw new Error("name, provider, license_type y price son campos obligatorios");
     }
+
+    assertValidType(license_type);
 
     if (price < 0) {
       throw new Error("El precio no puede ser negativo");
@@ -128,20 +135,13 @@ export const licenseService = {
       throw new Error("El precio no puede ser mayor a 1,000,000");
     }
 
-    if (purchase_date && expiration_date) {
-      if (new Date(expiration_date) < new Date(purchase_date)) {
-        throw new Error("La fecha de expiración no puede ser anterior a la de compra");
-      }
-    }
-
     const db = getDb();
     const licenseKey = generateUniqueLicenseKey(db);
     const insert = db.prepare(`
       INSERT INTO digital_licenses (
-        name, provider, license_key, license_type, purchase_date,
-        image, price, expiration_date, status, notes
+        name, provider, license_key, license_type, image, price, status, notes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const result = insert.run(
@@ -149,10 +149,8 @@ export const licenseService = {
       provider.trim(),
       licenseKey,
       license_type,
-      purchase_date || null,
       image ? image.trim() : null,
       price,
-      expiration_date || null,
       status,
       notes ? notes.trim() : null
     );
@@ -172,13 +170,8 @@ export const licenseService = {
       throw new Error("Licencia digital no encontrada");
     }
 
-    const purchaseDate = data.purchase_date !== undefined ? data.purchase_date : current.purchase_date;
-    const expirationDate = data.expiration_date !== undefined ? data.expiration_date : current.expiration_date;
-
-    if (purchaseDate && expirationDate) {
-      if (new Date(expirationDate) < new Date(purchaseDate)) {
-        throw new Error("La fecha de expiración no puede ser anterior a la de compra");
-      }
+    if (data.license_type !== undefined) {
+      assertValidType(data.license_type);
     }
 
     if (data.price !== undefined && data.price < 0) {
@@ -204,10 +197,6 @@ export const licenseService = {
       updates.push("license_type = ?");
       params.push(data.license_type);
     }
-    if (data.purchase_date !== undefined) {
-      updates.push("purchase_date = ?");
-      params.push(data.purchase_date || null);
-    }
     if (data.image !== undefined) {
       updates.push("image = ?");
       params.push(data.image ? data.image.trim() : null);
@@ -215,10 +204,6 @@ export const licenseService = {
     if (data.price !== undefined) {
       updates.push("price = ?");
       params.push(data.price);
-    }
-    if (data.expiration_date !== undefined) {
-      updates.push("expiration_date = ?");
-      params.push(data.expiration_date || null);
     }
     if (data.status !== undefined) {
       updates.push("status = ?");
