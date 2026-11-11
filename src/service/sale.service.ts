@@ -1,16 +1,30 @@
 import { getDb, withTransaction } from "@/lib/db";
 import { expirationModifier } from "@/lib/license-key";
-import { CreateSaleDTO, DigitalLicense, Sale, SaleItem, SoldKey } from "@/src/type";
+import {
+  CreateSaleDTO,
+  DigitalLicense,
+  Sale,
+  SaleItem,
+  SaleOrigin,
+  SoldKey,
+  WebPurchaseDTO,
+  WebPurchaseResult,
+} from "@/src/type";
 
 const MAX_QUANTITY = 1000;
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
+// Nombre de usuario: 3-30 caracteres, letras (con acentos), números, punto, guion y guion bajo
+const USERNAME_PATTERN = /^[\p{L}\p{N}._-]{3,30}$/u;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MAX_EMAIL_LENGTH = 254;
+
 type SaleRow = Omit<Sale, "items">;
 type SaleItemRow = Omit<SaleItem, "keys">;
 
 const SALE_SELECT = `
-  SELECT s.id, s.employee_id, s.total, s.created_at,
+  SELECT s.id, s.channel, s.employee_id, s.customer_name, s.customer_email, s.total, s.created_at,
          CASE WHEN e.id IS NULL THEN NULL ELSE e.first_name || ' ' || e.last_name END AS employee_name
   FROM sales s
   LEFT JOIN employees e ON e.id = s.employee_id
@@ -68,7 +82,7 @@ export const saleService = {
     return row ? attachItems([row])[0] : null;
   },
 
-  create(employeeId: number, data: CreateSaleDTO): Sale {
+  create(data: CreateSaleDTO, origin: SaleOrigin): Sale {
     if (!data || !Array.isArray(data.items) || data.items.length === 0) {
       throw new Error("La venta debe incluir al menos una licencia");
     }
@@ -141,8 +155,15 @@ export const saleService = {
         WHERE id = ? AND status = 'available'
       `);
 
+      const insertSale = db.prepare(`
+        INSERT INTO sales (channel, employee_id, customer_name, customer_email, total)
+        VALUES (?, ?, ?, ?, ?)
+      `);
       const id = Number(
-        db.prepare("INSERT INTO sales (employee_id, total) VALUES (?, ?)").run(employeeId, total).lastInsertRowid
+        (origin.channel === "pos"
+          ? insertSale.run("pos", origin.employeeId, null, null, total)
+          : insertSale.run("web", null, origin.customerName, origin.customerEmail, total)
+        ).lastInsertRowid
       );
 
       for (const line of lines) {
@@ -165,5 +186,40 @@ export const saleService = {
     }
 
     return created;
+  },
+
+  /**
+   * Compra de un cliente desde la tienda web: una unidad, sin empleado. Valida los datos
+   * del comprador y reutiliza create() para el stock, el precio y la asignación de clave.
+   */
+  createWebPurchase(input: Partial<WebPurchaseDTO> | null): WebPurchaseResult {
+    const customerName = typeof input?.customer_name === "string" ? input.customer_name.trim() : "";
+    const customerEmail =
+      typeof input?.customer_email === "string" ? input.customer_email.trim().toLowerCase() : "";
+
+    if (!USERNAME_PATTERN.test(customerName)) {
+      throw new Error(
+        "El nombre de usuario debe tener entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo"
+      );
+    }
+    if (customerEmail.length > MAX_EMAIL_LENGTH || !EMAIL_PATTERN.test(customerEmail)) {
+      throw new Error("Ingresa un correo electrónico válido");
+    }
+
+    const licenseId = Number(input?.license_id);
+    const sale = this.create(
+      { items: [{ license_id: licenseId, quantity: 1 }] },
+      { channel: "web", customerName, customerEmail }
+    );
+    const [item] = sale.items;
+
+    return {
+      sale_id: sale.id,
+      license_name: item.license_name,
+      total: sale.total,
+      customer_name: customerName,
+      customer_email: customerEmail,
+      keys: item.keys,
+    };
   },
 };

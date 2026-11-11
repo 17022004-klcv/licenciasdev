@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight,
   BadgeCheck,
   Check,
   ChevronDown,
+  Copy,
   CreditCard,
   FileKey,
   LockKeyhole,
@@ -16,6 +17,7 @@ import {
   Search,
   ShieldCheck,
   Sparkles,
+  User,
   X,
 } from "lucide-react";
 import {
@@ -23,7 +25,11 @@ import {
   LICENSE_TYPE_LABELS,
   type LicenseType,
   type PublicLicense,
+  type WebPurchaseResult,
 } from "@/src/type";
+
+// "YYYY-MM-DD" → "DD/MM/YYYY" sin pasar por Date (evita el desfase de zona horaria)
+const formatDay = (value: string) => value.split("-").reverse().join("/");
 
 const formatPrice = (price: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "USD" }).format(
@@ -37,22 +43,80 @@ export default function Home() {
   const [selected, setSelected] = useState<PublicLicense | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
-  const [paid, setPaid] = useState(false);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [purchasing, setPurchasing] = useState(false);
+  const [purchaseError, setPurchaseError] = useState("");
+  const [purchase, setPurchase] = useState<WebPurchaseResult | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  const loadLicenses = useCallback(
+    () =>
+      fetch("/api/public/licenses")
+        .then((response) => response.json())
+        .then((data) => setLicenses(data.success ? data.data : []))
+        .catch(() => setLicenses([])),
+    [],
+  );
 
   useEffect(() => {
-    fetch("/api/public/licenses")
-      .then((response) => response.json())
-      .then((data) => {
-        setLicenses(data.success ? data.data : []);
-        setLoading(false);
-      })
-      .catch(() => {
-        setLicenses([]);
-        setLoading(false);
+    loadLicenses();
+  }, [loadLicenses]);
+
+  const openCheckout = () => {
+    setPurchase(null);
+    setPurchaseError("");
+    setCopied(false);
+    setCheckoutOpen(true);
+  };
+
+  const closeCheckout = () => {
+    if (purchasing) return;
+    setCheckoutOpen(false);
+    // Tras una compra se vuelve al catálogo; si se canceló, el detalle sigue abierto
+    if (purchase) setSelected(null);
+  };
+
+  const submitPurchase = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selected) return;
+
+    setPurchasing(true);
+    setPurchaseError("");
+    try {
+      const response = await fetch("/api/public/purchase", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          license_id: selected.id,
+          customer_name: customerName,
+          customer_email: customerEmail,
+        }),
       });
-  }, []);
+      const data = await response.json();
+      if (!data.success) {
+        setPurchaseError(data.error || "No se pudo completar la compra");
+        // Si se agotó mientras el cliente llenaba el formulario, actualiza el stock
+        if (response.status === 409) loadLicenses();
+        return;
+      }
+      setPurchase(data.data);
+      loadLicenses();
+    } catch {
+      setPurchaseError("Error al conectar con el servidor");
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const copyKey = async (key: string) => {
+    try {
+      await navigator.clipboard.writeText(key);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   const visibleLicenses = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -240,6 +304,9 @@ export default function Home() {
                   <span className="type-label">
                     {LICENSE_TYPE_LABELS[license.license_type]}
                   </span>
+                  {license.stock === 0 && (
+                    <span className="sold-out-label">Agotado</span>
+                  )}
                 </div>
                 <div className="license-content">
                   <div className="provider">{license.provider}</div>
@@ -365,85 +432,139 @@ export default function Home() {
                 "Una licencia verificada para trabajar mejor, crear más y avanzar sin límites."}
             </p>
             <div className="modal-price">
-              <span>Precio final</span>
+              <span>
+                Precio final ·{" "}
+                {selected.license_type === "indefinite"
+                  ? "sin vencimiento"
+                  : `vigencia de ${LICENSE_TYPE_LABELS[selected.license_type]}`}
+              </span>
               <strong>{formatPrice(selected.price)}</strong>
             </div>
             <button
               className="primary-button full-button"
-              onClick={() => {
-                setPaid(false);
-                setCheckoutOpen(true);
-              }}
+              onClick={openCheckout}
+              disabled={selected.stock === 0}
             >
-              Simular compra <CreditCard size={17} />
+              {selected.stock === 0 ? (
+                "Agotado"
+              ) : (
+                <>
+                  Comprar licencia <CreditCard size={17} />
+                </>
+              )}
             </button>
             <small className="secure-note">
-              <LockKeyhole size={13} /> Simulación estática · No se realizará
-              ningún cargo
+              <LockKeyhole size={13} /> Pago simulado · No se realizará ningún
+              cargo
             </small>
           </div>
         </div>
       )}
-      {checkoutOpen && (
-        <div className="modal-backdrop" onClick={() => setCheckoutOpen(false)}>
+      {checkoutOpen && selected && (
+        <div className="modal-backdrop" onClick={closeCheckout}>
           <div
             className="product-modal checkout-modal"
             onClick={(event) => event.stopPropagation()}
           >
             <button
               className="close-button"
-              onClick={() => setCheckoutOpen(false)}
+              onClick={closeCheckout}
               aria-label="Cerrar"
+              disabled={purchasing}
             >
               <X size={19} />
             </button>
-            {paid ? (
+            {purchase ? (
               <div className="success-state">
                 <div className="success-icon">
                   <Check size={30} />
                 </div>
-                <h2>¡Todo listo!</h2>
+                <h2>¡Compra lista!</h2>
                 <p>
-                  Esta fue una simulación. En una compra real, tu licencia
-                  aparecería aquí de inmediato.
+                  Gracias, <strong>{purchase.customer_name}</strong>. Esta es tu
+                  clave de <strong>{purchase.license_name}</strong>. Guárdala en
+                  un lugar seguro.
                 </p>
-                <button
-                  className="primary-button"
-                  onClick={() => {
-                    setCheckoutOpen(false);
-                    setSelected(null);
-                  }}
-                >
+                {purchase.keys.map((key) => (
+                  <div className="purchase-key" key={key.license_key}>
+                    <code>{key.license_key}</code>
+                    <button
+                      type="button"
+                      onClick={() => copyKey(key.license_key)}
+                      aria-label="Copiar clave"
+                    >
+                      {copied ? <Check size={15} /> : <Copy size={15} />}
+                    </button>
+                    <small>
+                      {key.expires_at
+                        ? `Válida hasta el ${formatDay(key.expires_at)}`
+                        : "Sin fecha de vencimiento"}
+                    </small>
+                  </div>
+                ))}
+                <p className="purchase-receipt">
+                  Pedido #{purchase.sale_id} · {formatPrice(purchase.total)} ·{" "}
+                  {purchase.customer_email}
+                </p>
+                <button className="primary-button" onClick={closeCheckout}>
                   Volver al catálogo
                 </button>
               </div>
             ) : (
-              <>
-                <span className="section-kicker">Checkout de demostración</span>
+              <form onSubmit={submitPurchase}>
+                <span className="section-kicker">Finalizar compra</span>
                 <h2>Completa tus datos</h2>
                 <p className="checkout-copy">
-                  Estás adquiriendo <strong>{selected?.name}</strong>. No se
-                  guardará información ni se procesará ningún pago.
+                  Estás adquiriendo <strong>{selected.name}</strong> por{" "}
+                  <strong>{formatPrice(selected.price)}</strong>. Recibirás tu
+                  clave en cuanto confirmes.
                 </p>
                 <div className="checkout-form">
-                  <input placeholder="Nombre completo" />
-                  <input placeholder="Correo electrónico" type="email" />
                   <div className="card-input">
-                    <CreditCard size={17} />
-                    <input placeholder="Número de tarjeta (simulado)" />
+                    <User size={17} />
+                    <input
+                      placeholder="Nombre de usuario"
+                      value={customerName}
+                      onChange={(event) => setCustomerName(event.target.value)}
+                      autoComplete="username"
+                      minLength={3}
+                      maxLength={30}
+                      pattern="[\p{L}\p{N}._\-]{3,30}"
+                      title="Entre 3 y 30 caracteres: letras, números, punto, guion o guion bajo"
+                      required
+                    />
                   </div>
-                  <div className="form-row">
-                    <input placeholder="MM / AA" />
-                    <input placeholder="CVC" />
+                  <div className="card-input">
+                    <Mail size={17} />
+                    <input
+                      placeholder="Correo electrónico"
+                      type="email"
+                      value={customerEmail}
+                      onChange={(event) => setCustomerEmail(event.target.value)}
+                      autoComplete="email"
+                      maxLength={254}
+                      required
+                    />
                   </div>
                 </div>
+                {purchaseError && (
+                  <p className="form-error" role="alert">
+                    {purchaseError}
+                  </p>
+                )}
                 <button
+                  type="submit"
                   className="primary-button full-button"
-                  onClick={() => setPaid(true)}
+                  disabled={purchasing}
                 >
-                  Confirmar simulación <ArrowRight size={17} />
+                  {purchasing ? "Procesando..." : "Confirmar compra"}{" "}
+                  <ArrowRight size={17} />
                 </button>
-              </>
+                <small className="secure-note">
+                  <LockKeyhole size={13} /> Pago simulado · No se realizará
+                  ningún cargo
+                </small>
+              </form>
             )}
           </div>
         </div>

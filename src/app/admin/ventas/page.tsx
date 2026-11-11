@@ -38,6 +38,10 @@ const toLocalDateKey = (value: string) => {
 const formatDay = (value: string | null) =>
   value ? value.split("-").reverse().join("/") : "Sin vencimiento";
 
+// Quién hizo la venta: el empleado en el POS o la tienda web
+const sellerLabel = (sale: Sale) =>
+  sale.channel === "web" ? "Tienda web" : (sale.employee_name ?? "Empleado eliminado");
+
 const countUnits = (sale: Sale) => sale.items.reduce((sum, item) => sum + item.quantity, 0);
 
 export default function HistorialVentasPage() {
@@ -94,7 +98,9 @@ export default function HistorialVentasPage() {
       if (!term) return true;
       return (
         String(sale.id) === term.replace("#", "") ||
-        (sale.employee_name ?? "").toLowerCase().includes(term) ||
+        sellerLabel(sale).toLowerCase().includes(term) ||
+        (sale.customer_name ?? "").toLowerCase().includes(term) ||
+        (sale.customer_email ?? "").toLowerCase().includes(term) ||
         sale.items.some((item) => item.license_name.toLowerCase().includes(term))
       );
     });
@@ -153,7 +159,7 @@ export default function HistorialVentasPage() {
                   type="text"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder={isAdmin ? "Buscar por nº de venta, vendedor o licencia..." : "Buscar por nº de venta o licencia..."}
+                  placeholder={isAdmin ? "Buscar por nº de venta, vendedor, cliente o licencia..." : "Buscar por nº de venta o licencia..."}
                   className="w-full pl-10 pr-4 py-3 border border-[#DFE3DD] bg-[#E7EDE2] text-[#17201D] placeholder-[#859087] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C] focus:border-transparent"
                 />
               </div>
@@ -227,7 +233,10 @@ export default function HistorialVentasPage() {
                         </td>
                         {isAdmin && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-[#68716D]">{sale.employee_name ?? "Empleado eliminado"}</div>
+                            <div className="text-sm text-[#68716D]">{sellerLabel(sale)}</div>
+                            {sale.channel === "web" && (
+                              <div className="text-xs text-[#859087]">{sale.customer_name}</div>
+                            )}
                           </td>
                         )}
                         <td className="px-6 py-4">
@@ -284,9 +293,22 @@ export default function HistorialVentasPage() {
                   </div>
                   <div>
                     <label className="text-xs text-[#859087] uppercase tracking-wider">Vendedor</label>
-                    <p className="text-[#17201D] mt-1">{selectedSale.employee_name ?? "Empleado eliminado"}</p>
+                    <p className="text-[#17201D] mt-1">{sellerLabel(selectedSale)}</p>
                   </div>
                 </div>
+
+                {selectedSale.channel === "web" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs text-[#859087] uppercase tracking-wider">Cliente</label>
+                      <p className="text-[#17201D] mt-1">{selectedSale.customer_name}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs text-[#859087] uppercase tracking-wider">Correo</label>
+                      <p className="text-[#17201D] mt-1 break-all">{selectedSale.customer_email}</p>
+                    </div>
+                  </div>
+                )}
 
                 <div className="rounded-xl border border-[#DFE3DD] overflow-hidden">
                   <table className="w-full text-sm">

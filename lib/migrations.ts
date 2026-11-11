@@ -151,6 +151,15 @@ const MIGRATIONS: Migration[] = [
       DROP INDEX idx_digital_licenses_license_key;
       ALTER TABLE digital_licenses DROP COLUMN license_key;
     `),
+
+  // v3: ventas desde la tienda web. channel distingue el POS (con empleado) de la web
+  // (sin empleado, con los datos del comprador). Las ventas existentes quedan como 'pos'.
+  (db) =>
+    db.exec(`
+      ALTER TABLE sales ADD COLUMN channel TEXT NOT NULL DEFAULT 'pos' CHECK (channel IN ('pos', 'web'));
+      ALTER TABLE sales ADD COLUMN customer_name TEXT;
+      ALTER TABLE sales ADD COLUMN customer_email TEXT;
+    `),
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

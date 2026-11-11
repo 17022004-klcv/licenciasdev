@@ -42,12 +42,9 @@ Indexes and rules
    id	BIGINT	Primary key, auto-generated	Unique license record identifier.
    name	VARCHAR(150)	Not null	Product or license name.
    provider	VARCHAR(150)	Not null	Company or provider that supplies the license.
-   license_key	TEXT	Nullable	License key or activation code, if applicable.
-   license_type	VARCHAR(30)	Not null	Type of license, such as perpetual, subscription, or temporary.
-   purchase_date	DATE	Nullable	Date the license was purchased or acquired.
+   license_type	VARCHAR(30)	Not null	Duration of the license: 6_months, 1_year, or indefinite.
    image	TEXT	Nullable	URL or storage path for the product image.
    price	NUMERIC(8,2)	Not null	Purchase price or recorded license cost.
-   expiration_date	DATE	Nullable	Date the license expires, if applicable.
    status	VARCHAR(20)	Not null, default: active	Current license status.
    notes	TEXT	Nullable	Additional information about the license.
    created_at	TIMESTAMPTZ	Not null, default: NOW()	Date and time when the record was created.
@@ -55,10 +52,10 @@ Indexes and rules
 
 
 Suggested values
-license_type
-- perpetual
-- subscription
-- temporary
+license_type (duration; the expiration date is calculated per key when it is sold)
+- 6_months
+- 1_year
+- indefinite
   status
 - active
 - expired
@@ -67,8 +64,7 @@ license_type
   The application or database should validate these values so inconsistent spellings and unsupported statuses are not stored.
   Business rules
 - name, provider, license_type, and price are required.
-- expiration_date may be null for licenses that do not expire or whose expiration date is unknown.
-- If both purchase_date and expiration_date are present, the expiration date should not precede the purchase date.
+- A license is a catalog product. Its units are the rows in license_keys, and its stock is the number of available keys (it is calculated, not stored).
 - Define the currency used for price in the application requirements. The current schema does not store a currency code.
 - Clarify whether price represents the original purchase price, the current subscription cost, or another amount.
 5. Data Types and Design Decisions
@@ -99,7 +95,6 @@ Potential future additions include:
 - A check constraint for valid role values in employees.
 - Check constraints for valid license_type and status values in digital_licenses.
 - A check constraint requiring price >= 0, if negative prices are not meaningful for the application.
-- A check constraint ensuring expiration_date >= purchase_date whenever both dates are present.
 - A case-insensitive unique index for employee email addresses, if emails should be unique regardless of letter case.
 8. Summary
    The database begins with two focused tables: employees for application accounts and digital_licenses for license records. This design is intentionally small while leaving room for future relationships, session management, and auditability as requirements grow.
@@ -107,7 +102,10 @@ Potential future additions include:
    Stores each sale registered from the point of sale (POS) view.
    Column	Data type	Constraints	Description
    id	INTEGER	Primary key, auto-generated	Unique sale identifier.
-   employee_id	INTEGER	Nullable, FK employees(id) ON DELETE SET NULL	Employee who registered the sale.
+   channel	TEXT	Not null, default: pos, CHECK IN (pos, web)	pos = sold by an employee in the POS; web = bought by a customer on the landing page.
+   employee_id	INTEGER	Nullable, FK employees(id) ON DELETE SET NULL	Employee who registered the sale (NULL for web sales).
+   customer_name	TEXT	Nullable	Buyer's username (web sales only).
+   customer_email	TEXT	Nullable	Buyer's email, stored in lowercase (web sales only).
    total	REAL	Not null, CHECK total >= 0	Sale total, calculated on the server from the license prices.
    created_at	DATETIME	Not null, default: CURRENT_TIMESTAMP	Date and time of the sale.
 
@@ -128,3 +126,29 @@ Business rules
 - license_name and unit_price are copied so the sales history does not change if a license is edited or deleted.
 - A sale and its lines are inserted in a single transaction.
 - Sales are immutable: there is no endpoint to edit or delete them.
+- Each unit sold takes one available key from license_keys inside the same transaction (BEGIN IMMEDIATE), so two sales can never receive the same key. A sale fails if there is not enough stock.
+- Web purchases (POST /api/public/purchase) buy one unit, require a username and email, and are rate limited per IP.
+
+11. Table: license_keys
+   Inventory of a license: one row per unit.
+   Column	Data type	Constraints	Description
+   id	INTEGER	Primary key, auto-generated	Unique key identifier.
+   license_id	INTEGER	Nullable, FK digital_licenses(id) ON DELETE SET NULL	Product the key belongs to.
+   license_key	TEXT	Not null, unique	Activation key, format XXXXX-XXXXX-XXXXX-XXXXX without ambiguous characters (0/O, 1/I/L).
+   status	TEXT	Not null, default: available, CHECK IN (available, sold)	Whether the unit can still be sold.
+   sale_item_id	INTEGER	Nullable, FK sale_items(id) ON DELETE SET NULL	Sale line the key was sold in.
+   sold_at	DATETIME	Nullable	When the key was sold.
+   expires_at	DATE	Nullable	sold date + duration of the license; NULL for indefinite licenses.
+   created_at	DATETIME	Not null, default: CURRENT_TIMESTAMP	When the key was generated.
+
+Business rules
+- Keys are generated by the application when a license is created (initial units) or when an administrator adds units.
+- Deleting a license deletes its available keys; sold keys are kept (license_id becomes NULL) because they belong to the sales history.
+- Keys are never exposed by the public API.
+
+12. Migrations
+   lib/migrations.ts upgrades any database (new or existing) on server start, using PRAGMA user_version:
+- v1: license types become durations and purchase_date/expiration_date are removed. The new type is derived from the old dates (no expiration → indefinite, up to ~6 months → 6_months, longer → 1_year).
+- v2: license_keys is created; each license's old license_key becomes its first available unit, and digital_licenses.license_key is dropped.
+- v3: sales gets channel, customer_name, and customer_email.
+   Published migrations are never edited; schema changes go in a new migration.
