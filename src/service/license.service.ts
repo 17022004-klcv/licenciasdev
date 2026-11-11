@@ -1,5 +1,5 @@
-import { randomInt } from "crypto";
 import { getDb } from "@/lib/db";
+import { generateLicenseKey } from "@/lib/license-key";
 import {
   DigitalLicense,
   CreateLicenseDTO,
@@ -19,10 +19,7 @@ function formatLicense(license: DigitalLicense): DigitalLicense {
 
 function generateUniqueLicenseKey(db: ReturnType<typeof getDb>): string {
   for (let attempt = 0; attempt < 100; attempt++) {
-    const groups = Array.from({ length: 4 }, () =>
-      randomInt(0, 10000).toString().padStart(4, "0"),
-    );
-    const key = groups.join("-");
+    const key = generateLicenseKey();
 
     const existing = db
       .prepare("SELECT 1 FROM digital_licenses WHERE license_key = ?")
