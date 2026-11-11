@@ -1,4 +1,5 @@
 import { getDb } from "../lib/db";
+import { insertGeneratedKeys } from "../lib/license-key";
 import bcrypt from "bcrypt";
 
 function seed() {
@@ -7,6 +8,7 @@ function seed() {
 
   // Clear existing data for fresh test run
   db.exec(`
+    DELETE FROM license_keys;
     DELETE FROM sale_items;
     DELETE FROM sales;
     DELETE FROM digital_licenses;
@@ -80,21 +82,30 @@ function seed() {
   ];
 
   const insertLic = db.prepare(`
-    INSERT INTO digital_licenses (name, provider, license_key, license_type, image, price, status, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO digital_licenses (name, provider, license_type, image, price, status, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
+  const insertKey = db.prepare("INSERT INTO license_keys (license_id, license_key) VALUES (?, ?)");
 
+  // Cada licencia activa queda con 3 unidades: su clave de ejemplo y 2 generadas
   for (const lic of licenses) {
-    insertLic.run(
+    const { lastInsertRowid } = insertLic.run(
       lic.name,
       lic.provider,
-      lic.license_key,
       lic.license_type,
       lic.image,
       lic.price,
       lic.status,
       lic.notes
     );
+    const licenseId = Number(lastInsertRowid);
+
+    if (lic.license_key) {
+      insertKey.run(licenseId, lic.license_key);
+    }
+    if (lic.status === "active") {
+      insertGeneratedKeys(db, licenseId, lic.license_key ? 2 : 3);
+    }
   }
 
   console.log("✅ Base de datos inicializada y poblada con éxito.");

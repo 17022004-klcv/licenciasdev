@@ -14,21 +14,36 @@ export interface DigitalLicense {
   id: number;
   name: string;
   provider: string;
-  license_key: string | null;
   license_type: LicenseType;
   image: string | null;
   price: number;
   status: LicenseStatus;
   notes: string | null;
+  // Unidades disponibles para vender (claves con status "available")
+  stock: number;
   created_at: string;
   updated_at: string;
 }
 
-// Datos de una licencia que se pueden mostrar a clientes sin sesión (sin license_key)
+// Datos de una licencia que se pueden mostrar a clientes sin sesión (nunca incluye claves)
 export type PublicLicense = Pick<
   DigitalLicense,
-  "id" | "name" | "provider" | "license_type" | "image" | "price" | "notes"
+  "id" | "name" | "provider" | "license_type" | "image" | "price" | "notes" | "stock"
 >;
+
+export type LicenseKeyStatus = "available" | "sold";
+
+// Una unidad de inventario: cada clave se vende una sola vez
+export interface LicenseKey {
+  id: number;
+  license_id: number | null;
+  license_key: string;
+  status: LicenseKeyStatus;
+  sale_id: number | null;
+  sold_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
 
 export interface LicenseFilterParams {
   name?: string;
@@ -46,6 +61,8 @@ export interface CreateLicenseDTO {
   price: number;
   status?: LicenseStatus;
   notes?: string | null;
+  // Unidades (claves) que se generan al crear la licencia
+  initial_stock?: number;
 }
 
 export interface UpdateLicenseDTO {

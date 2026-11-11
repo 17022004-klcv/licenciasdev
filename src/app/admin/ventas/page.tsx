@@ -34,6 +34,10 @@ const toLocalDateKey = (value: string) => {
   return `${date.getFullYear()}-${month}-${day}`;
 };
 
+// "YYYY-MM-DD" → "DD/MM/YYYY" sin pasar por Date (evita el desfase de zona horaria)
+const formatDay = (value: string | null) =>
+  value ? value.split("-").reverse().join("/") : "Sin vencimiento";
+
 const countUnits = (sale: Sale) => sale.items.reduce((sum, item) => sum + item.quantity, 0);
 
 export default function HistorialVentasPage() {
@@ -297,7 +301,20 @@ export default function HistorialVentasPage() {
                     <tbody className="divide-y divide-[#DFE3DD]">
                       {selectedSale.items.map((item) => (
                         <tr key={item.id}>
-                          <td className="px-4 py-3 text-[#17201D]">{item.license_name}</td>
+                          <td className="px-4 py-3 text-[#17201D]">
+                            {item.license_name}
+                            {item.keys.length > 0 && (
+                              <ul className="mt-1 space-y-0.5">
+                                {item.keys.map((key) => (
+                                  <li key={key.license_key} className="text-xs text-[#68716D]">
+                                    <span className="font-mono text-[#17201D]">{key.license_key}</span>
+                                    {" · vence: "}
+                                    {formatDay(key.expires_at)}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-right text-[#68716D]">{formatPrice(item.unit_price)}</td>
                           <td className="px-4 py-3 text-right text-[#68716D]">{item.quantity}</td>
                           <td className="px-4 py-3 text-right font-medium text-[#17201D]">{formatPrice(item.subtotal)}</td>

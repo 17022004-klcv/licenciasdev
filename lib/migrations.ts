@@ -123,6 +123,34 @@ const MIGRATIONS: Migration[] = [
         ON digital_licenses(license_key)
         WHERE license_key IS NOT NULL;`,
     ),
+
+  // v2: una clave por unidad. digital_licenses pasa a ser el producto del catálogo y
+  // license_keys su inventario: el stock es el número de claves disponibles y cada
+  // unidad vendida queda ligada a su línea de venta con su fecha de expiración.
+  // La clave única que tenía cada licencia se convierte en su primera unidad.
+  // license_id usa SET NULL para que las claves vendidas sobrevivan si se borra el producto.
+  (db) =>
+    db.exec(`
+      CREATE TABLE license_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        license_id INTEGER REFERENCES digital_licenses(id) ON DELETE SET NULL,
+        license_key TEXT NOT NULL UNIQUE,
+        status TEXT NOT NULL DEFAULT 'available' CHECK (status IN ('available', 'sold')),
+        sale_item_id INTEGER REFERENCES sale_items(id) ON DELETE SET NULL,
+        sold_at DATETIME,
+        expires_at DATE,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE INDEX idx_license_keys_license_status ON license_keys(license_id, status);
+      CREATE INDEX idx_license_keys_sale_item_id ON license_keys(sale_item_id);
+
+      INSERT INTO license_keys (license_id, license_key)
+      SELECT id, license_key FROM digital_licenses WHERE license_key IS NOT NULL;
+
+      DROP INDEX idx_digital_licenses_license_key;
+      ALTER TABLE digital_licenses DROP COLUMN license_key;
+    `),
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

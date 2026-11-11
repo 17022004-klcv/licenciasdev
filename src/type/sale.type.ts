@@ -6,6 +6,13 @@ export interface SaleItem {
   unit_price: number;
   quantity: number;
   subtotal: number;
+  // Una clave por unidad vendida; expires_at null = no vence
+  keys: SoldKey[];
+}
+
+export interface SoldKey {
+  license_key: string;
+  expires_at: string | null;
 }
 
 export interface Sale {

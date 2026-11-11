@@ -1,11 +1,13 @@
-import { getDb } from "@/lib/db";
-import { CreateSaleDTO, DigitalLicense, Sale, SaleItem } from "@/src/type";
+import { getDb, withTransaction } from "@/lib/db";
+import { expirationModifier } from "@/lib/license-key";
+import { CreateSaleDTO, DigitalLicense, Sale, SaleItem, SoldKey } from "@/src/type";
 
 const MAX_QUANTITY = 1000;
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
 
 type SaleRow = Omit<Sale, "items">;
+type SaleItemRow = Omit<SaleItem, "keys">;
 
 const SALE_SELECT = `
   SELECT s.id, s.employee_id, s.total, s.created_at,
@@ -21,12 +23,30 @@ function attachItems(rows: SaleRow[]): Sale[] {
   const placeholders = rows.map(() => "?").join(", ");
   const items = db
     .prepare(`SELECT * FROM sale_items WHERE sale_id IN (${placeholders}) ORDER BY id`)
-    .all(...rows.map((row) => row.id)) as unknown as SaleItem[];
+    .all(...rows.map((row) => row.id)) as unknown as SaleItemRow[];
+
+  const keys =
+    items.length === 0
+      ? []
+      : (db
+          .prepare(`
+            SELECT sale_item_id, license_key, expires_at FROM license_keys
+            WHERE sale_item_id IN (${items.map(() => "?").join(", ")})
+            ORDER BY id
+          `)
+          .all(...items.map((item) => item.id)) as unknown as (SoldKey & { sale_item_id: number })[]);
 
   return rows.map((row) => ({
     ...row,
     total: Number(row.total),
-    items: items.filter((item) => item.sale_id === row.id),
+    items: items
+      .filter((item) => item.sale_id === row.id)
+      .map((item) => ({
+        ...item,
+        keys: keys
+          .filter((key) => key.sale_item_id === item.id)
+          .map(({ license_key, expires_at }) => ({ license_key, expires_at })),
+      })),
   }));
 }
 
@@ -62,52 +82,82 @@ export const saleService = {
       quantities.set(item.license_id, (quantities.get(item.license_id) ?? 0) + item.quantity);
     }
 
-    const db = getDb();
-    const findLicense = db.prepare("SELECT * FROM digital_licenses WHERE id = ?");
+    // Todo ocurre en una transacción con bloqueo de escritura: el stock que se comprueba
+    // es el mismo que se descuenta, aunque haya otra venta en curso
+    const saleId = withTransaction((db) => {
+      const findLicense = db.prepare("SELECT * FROM digital_licenses WHERE id = ?");
+      const takeKeys = db.prepare(`
+        SELECT id FROM license_keys
+        WHERE license_id = ? AND status = 'available'
+        ORDER BY id
+        LIMIT ?
+      `);
 
-    const lines = [...quantities].map(([licenseId, quantity]) => {
-      if (quantity > MAX_QUANTITY) {
-        throw new Error(`La cantidad máxima por licencia es ${MAX_QUANTITY}`);
-      }
+      const lines = [...quantities].map(([licenseId, quantity]) => {
+        if (quantity > MAX_QUANTITY) {
+          throw new Error(`La cantidad máxima por licencia es ${MAX_QUANTITY}`);
+        }
 
-      const license = findLicense.get(licenseId) as DigitalLicense | undefined;
-      if (!license) {
-        throw new Error(`Licencia ${licenseId} no encontrada`);
-      }
-      if (license.status !== "active") {
-        throw new Error(`La licencia "${license.name}" no está activa y no se puede vender`);
-      }
+        const license = findLicense.get(licenseId) as DigitalLicense | undefined;
+        if (!license) {
+          throw new Error(`Licencia ${licenseId} no encontrada`);
+        }
+        if (license.status !== "active") {
+          throw new Error(`La licencia "${license.name}" no está activa y no se puede vender`);
+        }
 
-      const unitPrice = Number(license.price);
-      return {
-        license_id: license.id,
-        license_name: license.name,
-        unit_price: unitPrice,
-        quantity,
-        subtotal: roundMoney(unitPrice * quantity),
-      };
-    });
+        const keyIds = (takeKeys.all(licenseId, quantity) as { id: number }[]).map((key) => key.id);
+        if (keyIds.length < quantity) {
+          throw new Error(
+            keyIds.length === 0
+              ? `La licencia "${license.name}" está agotada`
+              : `Stock insuficiente para "${license.name}": quedan ${keyIds.length}`
+          );
+        }
 
-    const total = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
+        const unitPrice = Number(license.price);
+        return {
+          license_id: license.id,
+          license_name: license.name,
+          license_type: license.license_type,
+          unit_price: unitPrice,
+          quantity,
+          subtotal: roundMoney(unitPrice * quantity),
+          keyIds,
+        };
+      });
 
-    const insertSale = db.prepare("INSERT INTO sales (employee_id, total) VALUES (?, ?)");
-    const insertItem = db.prepare(`
-      INSERT INTO sale_items (sale_id, license_id, license_name, unit_price, quantity, subtotal)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+      const total = roundMoney(lines.reduce((sum, line) => sum + line.subtotal, 0));
 
-    let saleId: number;
-    db.exec("BEGIN");
-    try {
-      saleId = Number(insertSale.run(employeeId, total).lastInsertRowid);
+      const insertItem = db.prepare(`
+        INSERT INTO sale_items (sale_id, license_id, license_name, unit_price, quantity, subtotal)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      // La vigencia empieza el día de la venta; date(..., NULL) devuelve NULL (no vence)
+      const sellKey = db.prepare(`
+        UPDATE license_keys
+        SET status = 'sold', sale_item_id = ?, sold_at = CURRENT_TIMESTAMP,
+            expires_at = date('now', ?)
+        WHERE id = ? AND status = 'available'
+      `);
+
+      const id = Number(
+        db.prepare("INSERT INTO sales (employee_id, total) VALUES (?, ?)").run(employeeId, total).lastInsertRowid
+      );
+
       for (const line of lines) {
-        insertItem.run(saleId, line.license_id, line.license_name, line.unit_price, line.quantity, line.subtotal);
+        const itemId = Number(
+          insertItem.run(id, line.license_id, line.license_name, line.unit_price, line.quantity, line.subtotal)
+            .lastInsertRowid
+        );
+        const modifier = expirationModifier(line.license_type);
+        for (const keyId of line.keyIds) {
+          sellKey.run(itemId, modifier, keyId);
+        }
       }
-      db.exec("COMMIT");
-    } catch (error) {
-      db.exec("ROLLBACK");
-      throw error;
-    }
+
+      return id;
+    });
 
     const created = this.getById(saleId);
     if (!created) {

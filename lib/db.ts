@@ -62,3 +62,20 @@ export function getDb(): DatabaseSync {
 
   return dbInstance;
 }
+
+/**
+ * Ejecuta `fn` dentro de una transacción. BEGIN IMMEDIATE toma el bloqueo de escritura
+ * desde el inicio, así dos ventas simultáneas no pueden leer el mismo stock disponible.
+ */
+export function withTransaction<T>(fn: (db: DatabaseSync) => T): T {
+  const db = getDb();
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = fn(db);
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
