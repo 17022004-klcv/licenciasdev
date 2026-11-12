@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const created = saleService.create(auth.user.id, body);
+    const created = saleService.create(body, { channel: "pos", employeeId: auth.user.id });
 
     return NextResponse.json(
       {
