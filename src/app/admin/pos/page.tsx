@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DigitalLicense, LicenseType, Sale } from "@/src/type";
+import { DigitalLicense, LicenseType, LICENSE_TYPES, LICENSE_TYPE_LABELS, Sale } from "@/src/type";
 import { CreditCard, FileText, Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -10,12 +10,6 @@ interface CartItem {
   license: DigitalLicense;
   quantity: number;
 }
-
-const TYPE_LABELS: Record<LicenseType, string> = {
-  perpetual: "Permanente",
-  subscription: "Suscripción",
-  temporary: "Temporal",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   active: "Activo",
@@ -26,11 +20,11 @@ const STATUS_LABELS: Record<string, string> = {
 
 const getTypeColor = (type: string) => {
   switch (type) {
-    case "perpetual":
+    case "indefinite":
       return "bg-[#E7EDE2] text-[#17201D] border-[#DFE3DD]";
-    case "subscription":
+    case "1_year":
       return "bg-[#D7ED4B]/30 text-[#17201D] border-[#91A91C]/40";
-    case "temporary":
+    case "6_months":
       return "bg-[#91A91C]/20 text-[#17201D] border-[#91A91C]/30";
     default:
       return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
@@ -48,6 +42,10 @@ const formatPrice = (price: number) => {
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+// "YYYY-MM-DD" → "DD/MM/YYYY" sin pasar por Date (evita el desfase de zona horaria)
+const formatDay = (value: string | null) =>
+  value ? value.split("-").reverse().join("/") : "Sin vencimiento";
+
 export default function PosPage() {
   const router = useRouter();
   const [licenses, setLicenses] = useState<DigitalLicense[]>([]);
@@ -55,6 +53,8 @@ export default function PosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [typeFilter, setTypeFilter] = useState<LicenseType | "">("");
   const [cart, setCart] = useState<CartItem[]>([]);
+  // Se incrementa tras cada venta para recargar el stock
+  const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     const loadLicenses = async () => {
@@ -87,7 +87,7 @@ export default function PosPage() {
     };
 
     loadLicenses();
-  }, [router]);
+  }, [router, reloadToken]);
 
   const visibleLicenses = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -108,6 +108,7 @@ export default function PosPage() {
     setCart((current) => {
       const existing = current.find((item) => item.license.id === license.id);
       if (existing) {
+        if (existing.quantity >= license.stock) return current;
         return current.map((item) =>
           item.license.id === license.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -120,7 +121,9 @@ export default function PosPage() {
     setCart((current) =>
       current
         .map((item) =>
-          item.license.id === licenseId ? { ...item, quantity: item.quantity + delta } : item
+          item.license.id === licenseId
+            ? { ...item, quantity: Math.min(item.quantity + delta, item.license.stock) }
+            : item
         )
         .filter((item) => item.quantity > 0)
     );
@@ -193,15 +196,38 @@ export default function PosPage() {
 
     if (!result.isConfirmed || !result.value) return;
 
-    const sale = result.value;
+    const sale = result.value as Sale;
+    setCart([]);
+    setReloadToken((token) => token + 1);
+
+    // Las claves se muestran para entregarlas al cliente; también quedan en el historial
+    const keyRows = sale.items
+      .flatMap((item) =>
+        item.keys.map(
+          (key) =>
+            `<tr>
+              <td style="text-align:left;padding:4px 8px 4px 0">${escapeHtml(item.license_name)}</td>
+              <td style="text-align:left;padding:4px 8px 4px 0;font-family:monospace">${escapeHtml(key.license_key)}</td>
+              <td style="text-align:right;padding:4px 0;white-space:nowrap">${formatDay(key.expires_at)}</td>
+            </tr>`
+        )
+      )
+      .join("");
+
     await Swal.fire({
       icon: "success",
       title: `Venta #${sale.id} registrada`,
-      text: `${itemCount} ${itemCount === 1 ? "licencia" : "licencias"} por ${formatPrice(sale.total)}`,
-      timer: 2500,
-      showConfirmButton: false,
+      width: 640,
+      html: `
+        <p style="margin-bottom:12px">${itemCount} ${itemCount === 1 ? "licencia" : "licencias"} por ${formatPrice(sale.total)}</p>
+        <div style="max-height:260px;overflow:auto">
+          <table style="width:100%;font-size:13px">
+            <tr style="font-weight:600"><td style="text-align:left">Licencia</td><td style="text-align:left">Clave</td><td style="text-align:right">Vence</td></tr>
+            ${keyRows}
+          </table>
+        </div>`,
+      confirmButtonText: "Listo",
     });
-    setCart([]);
   };
 
   return (
@@ -231,7 +257,7 @@ export default function PosPage() {
                 />
               </div>
               <div className="flex flex-wrap gap-2">
-                {(["", "perpetual", "subscription", "temporary"] as const).map((type) => (
+                {(["", ...LICENSE_TYPES] as const).map((type) => (
                   <button
                     key={type || "all"}
                     onClick={() => setTypeFilter(type)}
@@ -241,7 +267,7 @@ export default function PosPage() {
                         : "border-[#DFE3DD] text-[#68716D] hover:bg-[#E7EDE2]"
                     }`}
                   >
-                    {type ? TYPE_LABELS[type] : "Todas"}
+                    {type ? LICENSE_TYPE_LABELS[type] : "Todas"}
                   </button>
                 ))}
               </div>
@@ -260,7 +286,8 @@ export default function PosPage() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                 {visibleLicenses.map((license) => {
-                  const available = license.status === "active";
+                  const active = license.status === "active";
+                  const available = active && license.stock > 0;
                   const inCart = cart.find((item) => item.license.id === license.id)?.quantity ?? 0;
 
                   return (
@@ -293,11 +320,19 @@ export default function PosPage() {
 
                       <div className="flex flex-wrap gap-2 mb-4">
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}>
-                          {TYPE_LABELS[license.license_type]}
+                          {LICENSE_TYPE_LABELS[license.license_type]}
                         </span>
-                        {!available && (
+                        {!active ? (
                           <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-red-500/20 text-red-700 border-red-500/30">
                             {STATUS_LABELS[license.status] ?? license.status}
+                          </span>
+                        ) : license.stock === 0 ? (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full border bg-red-500/20 text-red-700 border-red-500/30">
+                            Agotado
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded-full border border-[#DFE3DD] text-[#68716D]">
+                            Stock: {license.stock}
                           </span>
                         )}
                       </div>
@@ -306,7 +341,7 @@ export default function PosPage() {
                         <span className="text-lg font-bold text-[#17201D]">{formatPrice(license.price)}</span>
                         <button
                           onClick={() => addToCart(license)}
-                          disabled={!available}
+                          disabled={!available || inCart >= license.stock}
                           className="px-3 py-2 bg-[#D7ED4B] text-[#17201D] text-sm font-semibold rounded-xl hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all inline-flex items-center gap-1 disabled:cursor-not-allowed disabled:bg-[#E7EDE2] disabled:text-[#859087]"
                         >
                           <Plus className="h-4 w-4" />
@@ -364,7 +399,8 @@ export default function PosPage() {
                         <span className="w-8 text-center text-sm text-[#17201D]">{item.quantity}</span>
                         <button
                           onClick={() => changeQuantity(item.license.id, 1)}
-                          className="p-1.5 text-[#68716D] hover:bg-[#E7EDE2] rounded-r-lg"
+                          disabled={item.quantity >= item.license.stock}
+                          className="p-1.5 text-[#68716D] hover:bg-[#E7EDE2] rounded-r-lg disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Aumentar cantidad"
                         >
                           <Plus className="h-3.5 w-3.5" />

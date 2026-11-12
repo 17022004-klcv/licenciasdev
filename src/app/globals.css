@@ -735,6 +735,67 @@ footer .brand {
 .success-state h2 {
   margin-top: 0;
 }
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+.sold-out-label {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  border-radius: 3px;
+  padding: 6px 8px;
+  background: var(--ink);
+  color: var(--lime);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.form-error {
+  margin: -6px 0 14px;
+  color: #b42318 !important;
+  font-size: 12px !important;
+}
+.purchase-key {
+  margin: 20px 0 6px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 12px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 10px;
+  text-align: left;
+}
+.purchase-key code {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.purchase-key button {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 7px;
+  background: var(--paper);
+  color: var(--ink);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.purchase-key small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+}
+.purchase-receipt {
+  margin-bottom: 20px;
+  font-size: 11px !important;
+}
 @keyframes modal-in {
   from {
     opacity: 0;

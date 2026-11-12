@@ -4,8 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import {
   DigitalLicense,
   LicenseFilterParams,
+  LicenseKey,
   LicenseStatus,
   LicenseType,
+  LICENSE_TYPES,
+  LICENSE_TYPE_LABELS,
 } from "@/src/type";
 import { useRouter } from "next/navigation";
 import {
@@ -20,6 +23,7 @@ import {
   X,
   Upload,
   Loader2,
+  KeyRound,
 } from "lucide-react";
 import Swal from "sweetalert2";
 
@@ -29,25 +33,29 @@ interface LicenseFormState {
   name: string;
   provider: string;
   license_type: LicenseType;
-  purchase_date: string;
   image: string;
   price: string;
-  expiration_date: string;
   status: LicenseStatus;
   notes: string;
+  initial_stock: string;
 }
 
 const EMPTY_FORM: LicenseFormState = {
   name: "",
   provider: "",
-  license_type: "subscription",
-  purchase_date: "",
+  license_type: "1_year",
   image: "",
   price: "",
-  expiration_date: "",
   status: "active",
   notes: "",
+  initial_stock: "1",
 };
+
+// "YYYY-MM-DD" → "DD/MM/YYYY" sin pasar por Date (evita el desfase de zona horaria)
+const formatDay = (value: string | null) =>
+  value ? value.slice(0, 10).split("-").reverse().join("/") : "Sin vencimiento";
+
+const maskKey = (key: string) => `•••••-•••••-•••••-${key.slice(-5)}`;
 
 const inputClass =
   "w-full px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] placeholder-[#859087] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C] transition-all";
@@ -75,6 +83,10 @@ export default function CatalogoLicenciasPage() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [keys, setKeys] = useState<LicenseKey[]>([]);
+  const [keysLoading, setKeysLoading] = useState(false);
+  const [addQuantity, setAddQuantity] = useState("1");
+  const [addingKeys, setAddingKeys] = useState(false);
 
   const fetchLicenses = useCallback(
     async (filterParams: CatalogFilters = {}) => {
@@ -145,16 +157,81 @@ export default function CatalogoLicenciasPage() {
     return () => clearTimeout(timeout);
   }, [fetchLicenses, getCurrentFilters]);
 
+  const loadKeys = async (licenseId: number) => {
+    setKeysLoading(true);
+    try {
+      const response = await fetch(`/api/licenses/${licenseId}/keys`);
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Error al cargar las claves");
+      setKeys(data.data);
+    } catch (error) {
+      setKeys([]);
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error instanceof Error ? error.message : "Error al cargar las claves",
+      });
+    } finally {
+      setKeysLoading(false);
+    }
+  };
+
   const openModal = (license: DigitalLicense) => {
     setSelectedLicense(license);
     setShowLicenseKey(false);
+    setAddQuantity("1");
+    setKeys([]);
     setShowModal(true);
+    loadKeys(license.id);
   };
 
   const closeModal = () => {
     setShowModal(false);
     setShowLicenseKey(false);
     setSelectedLicense(null);
+    setKeys([]);
+  };
+
+  const handleAddKeys = async () => {
+    if (!selectedLicense) return;
+    const quantity = Number(addQuantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 500) {
+      Swal.fire({
+        icon: "warning",
+        title: "Cantidad inválida",
+        text: "Ingresa un número entero entre 1 y 500",
+      });
+      return;
+    }
+
+    setAddingKeys(true);
+    try {
+      const response = await fetch(`/api/licenses/${selectedLicense.id}/keys`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Error al agregar unidades");
+
+      setSelectedLicense(data.data);
+      setAddQuantity("1");
+      await Promise.all([loadKeys(selectedLicense.id), refresh()]);
+      Swal.fire({
+        icon: "success",
+        title: data.message,
+        timer: 1500,
+        showConfirmButton: false,
+      });
+    } catch (error) {
+      Swal.fire({
+        icon: "error",
+        title: "Error",
+        text: error instanceof Error ? error.message : "Error al agregar unidades",
+      });
+    } finally {
+      setAddingKeys(false);
+    }
   };
 
   const handleAdd = () => {
@@ -169,12 +246,11 @@ export default function CatalogoLicenciasPage() {
       name: license.name,
       provider: license.provider,
       license_type: license.license_type,
-      purchase_date: license.purchase_date ?? "",
       image: license.image ?? "",
       price: String(license.price),
-      expiration_date: license.expiration_date ?? "",
       status: license.status,
       notes: license.notes ?? "",
+      initial_stock: "0",
     });
     setShowFormModal(true);
   };
@@ -265,27 +341,26 @@ export default function CatalogoLicenciasPage() {
       return;
     }
 
+    const initialStock = Number(form.initial_stock);
     if (
-      form.purchase_date &&
-      form.expiration_date &&
-      new Date(form.expiration_date) < new Date(form.purchase_date)
+      !editingLicense &&
+      (!Number.isInteger(initialStock) || initialStock < 0 || initialStock > 500)
     ) {
       Swal.fire({
         icon: "warning",
-        title: "Fechas inválidas",
-        text: "La fecha de expiración no puede ser anterior a la de compra",
+        title: "Unidades inválidas",
+        text: "Las unidades iniciales deben ser un entero entre 0 y 500",
       });
       return;
     }
 
     const payload = {
+      ...(editingLicense ? {} : { initial_stock: initialStock }),
       name: form.name.trim(),
       provider: form.provider.trim(),
       license_type: form.license_type,
-      purchase_date: form.purchase_date || null,
       image: form.image.trim() || null,
       price,
-      expiration_date: form.expiration_date || null,
       status: form.status,
       notes: form.notes.trim() || null,
     };
@@ -315,7 +390,7 @@ export default function CatalogoLicenciasPage() {
         title: editingLicense ? "Licencia actualizada" : "Licencia creada",
         text: editingLicense
           ? data.message
-          : `${data.message}. Clave generada: ${data.data.license_key}`,
+          : `${data.message} con ${data.data.stock} ${data.data.stock === 1 ? "unidad" : "unidades"} en stock`,
         timer: editingLicense ? 1500 : 4000,
         showConfirmButton: false,
       });
@@ -397,20 +472,15 @@ export default function CatalogoLicenciasPage() {
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case "perpetual":
+      case "indefinite":
         return "bg-[#E7EDE2] text-[#17201D] border-[#DFE3DD]";
-      case "subscription":
+      case "1_year":
         return "bg-[#D7ED4B]/30 text-[#17201D] border-[#91A91C]/40";
-      case "temporary":
+      case "6_months":
         return "bg-[#91A91C]/20 text-[#17201D] border-[#91A91C]/30";
       default:
         return "bg-[#68716D]/20 text-[#68716D] border-[#DFE3DD]";
     }
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "N/A";
-    return new Date(dateString).toLocaleDateString("es-ES");
   };
 
   const formatPrice = (price: number) => {
@@ -482,10 +552,12 @@ export default function CatalogoLicenciasPage() {
               onChange={(e) => setCategoria(e.target.value)}
               className="px-4 py-2.5 border border-[#DFE3DD] bg-[#FBFCF8] text-[#17201D] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#91A91C]"
             >
-              <option value="">Todas las categorías</option>
-              <option value="perpetual">Permanente</option>
-              <option value="subscription">Suscripción</option>
-              <option value="temporary">Temporal</option>
+              <option value="">Todas las duraciones</option>
+              {LICENSE_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {LICENSE_TYPE_LABELS[type]}
+                </option>
+              ))}
             </select>
             <select
               value={hasImage}
@@ -528,12 +600,12 @@ export default function CatalogoLicenciasPage() {
             <table className="w-full table-fixed text-left border-collapse">
               <colgroup>
                 <col className="w-[7%]" />
-                <col className="w-[21%]" />
+                <col className="w-[22%]" />
                 <col className="w-[15%]" />
                 <col className="w-[11%]" />
                 <col className="w-[11%]" />
                 <col className="w-[10%]" />
-                <col className="w-[10%]" />
+                <col className="w-[9%]" />
                 <col className="w-[15%]" />
               </colgroup>
               <thead>
@@ -541,10 +613,10 @@ export default function CatalogoLicenciasPage() {
                   <th className="px-3 py-4">Imagen</th>
                   <th className="px-3 py-4">Nombre</th>
                   <th className="px-3 py-4">Proveedor</th>
-                  <th className="px-3 py-4">Tipo</th>
+                  <th className="px-3 py-4">Duración</th>
                   <th className="px-3 py-4">Estado</th>
                   <th className="px-3 py-4">Precio</th>
-                  <th className="px-3 py-4">Expiración</th>
+                  <th className="px-3 py-4">Stock</th>
                   <th className="px-3 py-4 text-center">Acciones</th>
                 </tr>
               </thead>
@@ -592,11 +664,7 @@ export default function CatalogoLicenciasPage() {
                       <span
                         className={`inline-block max-w-full truncate px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(license.license_type)}`}
                       >
-                        {license.license_type === "perpetual"
-                          ? "Permanente"
-                          : license.license_type === "subscription"
-                            ? "Suscripción"
-                            : "Temporal"}
+                        {LICENSE_TYPE_LABELS[license.license_type]}
                       </span>
                     </td>
                     <td className="px-3 py-4">
@@ -618,11 +686,12 @@ export default function CatalogoLicenciasPage() {
                     >
                       {formatPrice(license.price)}
                     </td>
-                    <td
-                      className="truncate px-3 py-4 text-[#68716D]"
-                      title={formatDate(license.expiration_date)}
-                    >
-                      {formatDate(license.expiration_date)}
+                    <td className="px-3 py-4">
+                      <span
+                        className={`font-semibold ${license.stock === 0 ? "text-red-600" : "text-[#17201D]"}`}
+                      >
+                        {license.stock === 0 ? "Agotado" : license.stock}
+                      </span>
                     </td>
                     <td className="px-3 py-4 text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -726,7 +795,7 @@ export default function CatalogoLicenciasPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="license_type" className={labelClass}>
-                        Tipo de licencia *
+                        Duración *
                       </label>
                       <select
                         id="license_type"
@@ -735,9 +804,11 @@ export default function CatalogoLicenciasPage() {
                         onChange={handleFieldChange}
                         className={inputClass}
                       >
-                        <option value="perpetual">Permanente</option>
-                        <option value="subscription">Suscripción</option>
-                        <option value="temporary">Temporal</option>
+                        {LICENSE_TYPES.map((type) => (
+                          <option key={type} value={type}>
+                            {LICENSE_TYPE_LABELS[type]}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -778,39 +849,34 @@ export default function CatalogoLicenciasPage() {
                         className={inputClass}
                       />
                     </div>
-                    <div className="flex items-center rounded-xl border border-[#DFE3DD] bg-[#E7EDE2]/50 px-4 py-2.5 text-sm text-[#68716D]">
-                      La clave de licencia se genera automáticamente y es
-                      única.
-                    </div>
+                    {editingLicense ? (
+                      <div className="flex items-center rounded-xl border border-[#DFE3DD] bg-[#E7EDE2]/50 px-4 py-2.5 text-sm text-[#68716D]">
+                        Para agregar unidades usa el botón «Ver detalles».
+                      </div>
+                    ) : (
+                      <div>
+                        <label htmlFor="initial_stock" className={labelClass}>
+                          Unidades iniciales
+                        </label>
+                        <input
+                          id="initial_stock"
+                          name="initial_stock"
+                          type="number"
+                          min="0"
+                          max="500"
+                          step="1"
+                          value={form.initial_stock}
+                          onChange={handleFieldChange}
+                          className={inputClass}
+                        />
+                      </div>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="purchase_date" className={labelClass}>
-                        Fecha de compra
-                      </label>
-                      <input
-                        id="purchase_date"
-                        name="purchase_date"
-                        type="date"
-                        value={form.purchase_date}
-                        onChange={handleFieldChange}
-                        className={inputClass}
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="expiration_date" className={labelClass}>
-                        Fecha de expiración
-                      </label>
-                      <input
-                        id="expiration_date"
-                        name="expiration_date"
-                        type="date"
-                        value={form.expiration_date}
-                        onChange={handleFieldChange}
-                        className={inputClass}
-                      />
-                    </div>
+                  <div className="rounded-xl border border-[#DFE3DD] bg-[#E7EDE2]/50 px-4 py-2.5 text-sm text-[#68716D]">
+                    Se genera una clave única por unidad. La fecha de
+                    expiración de cada clave se calcula al venderla según la
+                    duración.
                   </div>
 
                   <div>
@@ -963,17 +1029,13 @@ export default function CatalogoLicenciasPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Tipo de Licencia
+                      Duración
                     </label>
                     <div className="mt-1">
                       <span
                         className={`px-3 py-1 text-xs font-medium rounded-full border ${getTypeColor(selectedLicense.license_type)}`}
                       >
-                        {selectedLicense.license_type === "perpetual"
-                          ? "Permanente"
-                          : selectedLicense.license_type === "subscription"
-                            ? "Suscripción"
-                            : "Temporal"}
+                        {LICENSE_TYPE_LABELS[selectedLicense.license_type]}
                       </span>
                     </div>
                   </div>
@@ -1008,59 +1070,101 @@ export default function CatalogoLicenciasPage() {
                   </div>
                   <div>
                     <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Fecha de Compra
+                      Stock disponible
                     </label>
-                    <p className="text-[#68716D] mt-1">
-                      {formatDate(selectedLicense.purchase_date)}
+                    <p
+                      className={`mt-1 font-medium ${selectedLicense.stock === 0 ? "text-red-600" : "text-[#17201D]"}`}
+                    >
+                      {selectedLicense.stock === 0
+                        ? "Agotado"
+                        : `${selectedLicense.stock} ${selectedLicense.stock === 1 ? "unidad" : "unidades"}`}
                     </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
                     <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Fecha de Expiración
+                      Claves ({keys.length})
                     </label>
-                    <p className="text-[#68716D] mt-1">
-                      {formatDate(selectedLicense.expiration_date)}
-                    </p>
+                    {keys.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowLicenseKey((prev) => !prev)}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-[#68716D] hover:text-[#17201D]"
+                      >
+                        {showLicenseKey ? (
+                          <EyeOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Eye className="h-3.5 w-3.5" />
+                        )}
+                        {showLicenseKey ? "Ocultar claves" : "Mostrar claves"}
+                      </button>
+                    )}
                   </div>
-                  <div>
-                    <label className="text-xs text-[#859087] uppercase tracking-wider font-semibold">
-                      Clave de Licencia
-                    </label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="flex-1 text-[#17201D] font-mono text-sm bg-[#F5F5F0] border border-[#DFE3DD] px-3 py-1.5 rounded-lg break-all">
-                        {selectedLicense.license_key
-                          ? showLicenseKey
-                            ? selectedLicense.license_key
-                            : "•••• •••• •••• ••••"
-                          : "N/A"}
+                  <div className="rounded-xl border border-[#DFE3DD] max-h-60 overflow-y-auto">
+                    {keysLoading ? (
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-[#91A91C]" />
+                      </div>
+                    ) : keys.length === 0 ? (
+                      <p className="px-4 py-6 text-center text-sm text-[#859087]">
+                        Esta licencia no tiene claves. Agrega unidades abajo.
                       </p>
-                      {selectedLicense.license_key && (
-                        <button
-                          type="button"
-                          onClick={() => setShowLicenseKey((prev) => !prev)}
-                          title={
-                            showLicenseKey
-                              ? "Ocultar clave de licencia"
-                              : "Mostrar clave de licencia"
-                          }
-                          aria-label={
-                            showLicenseKey
-                              ? "Ocultar clave de licencia"
-                              : "Mostrar clave de licencia"
-                          }
-                          className="p-2 rounded-lg bg-[#E7EDE2] text-[#17201D] hover:bg-[#D7ED4B] transition-all shrink-0"
-                        >
-                          {showLicenseKey ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
+                    ) : (
+                      <ul className="divide-y divide-[#DFE3DD] text-sm">
+                        {keys.map((key) => (
+                          <li
+                            key={key.id}
+                            className="flex items-center justify-between gap-3 px-4 py-2"
+                          >
+                            <span className="flex items-center gap-2 font-mono text-[#17201D] break-all">
+                              <KeyRound className="h-3.5 w-3.5 shrink-0 text-[#859087]" />
+                              {showLicenseKey ? key.license_key : maskKey(key.license_key)}
+                            </span>
+                            {key.status === "available" ? (
+                              <span className="shrink-0 px-2 py-0.5 text-xs font-medium rounded-full border bg-[#D7ED4B]/20 text-[#17201D] border-[#91A91C]/30">
+                                Disponible
+                              </span>
+                            ) : (
+                              <span
+                                className="shrink-0 text-right text-xs text-[#68716D]"
+                                title={`Vence: ${formatDay(key.expires_at)}`}
+                              >
+                                Vendida{key.sale_id ? ` · Venta #${key.sale_id}` : ""}
+                                <br />
+                                Vence: {formatDay(key.expires_at)}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="500"
+                      step="1"
+                      value={addQuantity}
+                      onChange={(e) => setAddQuantity(e.target.value)}
+                      aria-label="Unidades a agregar"
+                      className={`${inputClass} max-w-28`}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddKeys}
+                      disabled={addingKeys}
+                      className="px-4 py-2.5 bg-[#D7ED4B] text-[#17201D] font-semibold text-sm rounded-xl hover:bg-[#91A91C] hover:text-[#F5F5F0] transition-all inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {addingKeys ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
                       )}
-                    </div>
+                      Agregar unidades
+                    </button>
                   </div>
                 </div>
 
