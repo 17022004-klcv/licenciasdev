@@ -1,39 +1,48 @@
-import { randomInt } from "crypto";
-import { getDb } from "@/lib/db";
+import { getDb, withTransaction } from "@/lib/db";
+import { insertGeneratedKeys } from "@/lib/license-key";
 import {
   DigitalLicense,
+  LicenseKey,
   CreateLicenseDTO,
   UpdateLicenseDTO,
   LicenseFilterParams,
   PublicLicense,
+  LICENSE_TYPES,
+  LicenseType,
 } from "@/src/type";
 
 const MAX_PRICE = 1_000_000;
+// Máximo de claves que se pueden generar en una sola operación
+export const MAX_KEYS_PER_REQUEST = 500;
+
+// El stock se calcula a partir de las claves disponibles en vez de guardarse en una
+// columna, así nunca se desincroniza del inventario real
+const LICENSE_SELECT = `
+  SELECT l.*,
+         (SELECT COUNT(*) FROM license_keys k
+           WHERE k.license_id = l.id AND k.status = 'available') AS stock
+  FROM digital_licenses l
+`;
+
+function assertValidKeyCount(count: unknown, allowZero: boolean): asserts count is number {
+  const min = allowZero ? 0 : 1;
+  if (!Number.isInteger(count) || (count as number) < min || (count as number) > MAX_KEYS_PER_REQUEST) {
+    throw new Error(`La cantidad de unidades debe ser un entero entre ${min} y ${MAX_KEYS_PER_REQUEST}`);
+  }
+}
+
+function assertValidType(type: unknown): asserts type is LicenseType {
+  if (!LICENSE_TYPES.includes(type as LicenseType)) {
+    throw new Error(`Tipo de licencia inválido. Valores permitidos: ${LICENSE_TYPES.join(", ")}`);
+  }
+}
 
 function formatLicense(license: DigitalLicense): DigitalLicense {
   return {
     ...license,
     price: Number(license.price),
+    stock: Number(license.stock),
   };
-}
-
-function generateUniqueLicenseKey(db: ReturnType<typeof getDb>): string {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const groups = Array.from({ length: 4 }, () =>
-      randomInt(0, 10000).toString().padStart(4, "0"),
-    );
-    const key = groups.join("-");
-
-    const existing = db
-      .prepare("SELECT 1 FROM digital_licenses WHERE license_key = ?")
-      .get(key);
-
-    if (!existing) {
-      return key;
-    }
-  }
-
-  throw new Error("No se pudo generar una clave de licencia única");
 }
 
 export const licenseService = {
@@ -41,7 +50,7 @@ export const licenseService = {
     const db = getDb();
 
     if (!filters || Object.keys(filters).length === 0) {
-      const rows = db.prepare("SELECT * FROM digital_licenses ORDER BY id DESC").all() as unknown as DigitalLicense[];
+      const rows = db.prepare(`${LICENSE_SELECT} ORDER BY l.id DESC`).all() as unknown as DigitalLicense[];
       return rows.map(formatLicense);
     }
 
@@ -50,34 +59,34 @@ export const licenseService = {
 
     // General search across name, provider, or notes
     if (filters.search) {
-      whereClauses.push("(name LIKE ? OR provider LIKE ? OR notes LIKE ?)");
+      whereClauses.push("(l.name LIKE ? OR l.provider LIKE ? OR l.notes LIKE ?)");
       const term = `%${filters.search.trim()}%`;
       params.push(term, term, term);
     }
 
     // Specific filters: name, provider, license_type, status
     if (filters.name) {
-      whereClauses.push("name LIKE ?");
+      whereClauses.push("l.name LIKE ?");
       params.push(`%${filters.name.trim()}%`);
     }
 
     if (filters.provider) {
-      whereClauses.push("provider LIKE ?");
+      whereClauses.push("l.provider LIKE ?");
       params.push(`%${filters.provider.trim()}%`);
     }
 
     if (filters.license_type) {
-      whereClauses.push("license_type = ?");
+      whereClauses.push("l.license_type = ?");
       params.push(filters.license_type);
     }
 
     if (filters.status) {
-      whereClauses.push("status = ?");
+      whereClauses.push("l.status = ?");
       params.push(filters.status);
     }
 
     const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
-    const sql = `SELECT * FROM digital_licenses ${whereSql} ORDER BY id DESC`;
+    const sql = `${LICENSE_SELECT} ${whereSql} ORDER BY l.id DESC`;
 
     const stmt = db.prepare(sql);
     // @ts-expect-error dynamic params for DatabaseSync all
@@ -95,14 +104,14 @@ export const licenseService = {
       license_type: license.license_type,
       image: license.image,
       price: license.price,
-      expiration_date: license.expiration_date,
       notes: license.notes,
+      stock: license.stock,
     }));
   },
 
   getById(id: number): DigitalLicense | null {
     const db = getDb();
-    const row = db.prepare("SELECT * FROM digital_licenses WHERE id = ?").get(id) as DigitalLicense | undefined;
+    const row = db.prepare(`${LICENSE_SELECT} WHERE l.id = ?`).get(id) as DigitalLicense | undefined;
     return row ? formatLicense(row) : null;
   },
 
@@ -111,17 +120,18 @@ export const licenseService = {
       name,
       provider,
       license_type,
-      purchase_date = null,
       image = null,
       price,
-      expiration_date = null,
       status = "active",
       notes = null,
+      initial_stock = 1,
     } = data;
 
     if (!name || !provider || !license_type || price === undefined || price === null) {
       throw new Error("name, provider, license_type y price son campos obligatorios");
     }
+
+    assertValidType(license_type);
 
     if (price < 0) {
       throw new Error("El precio no puede ser negativo");
@@ -131,36 +141,30 @@ export const licenseService = {
       throw new Error("El precio no puede ser mayor a 1,000,000");
     }
 
-    if (purchase_date && expiration_date) {
-      if (new Date(expiration_date) < new Date(purchase_date)) {
-        throw new Error("La fecha de expiración no puede ser anterior a la de compra");
-      }
-    }
+    assertValidKeyCount(initial_stock, true);
 
-    const db = getDb();
-    const licenseKey = generateUniqueLicenseKey(db);
-    const insert = db.prepare(`
-      INSERT INTO digital_licenses (
-        name, provider, license_key, license_type, purchase_date,
-        image, price, expiration_date, status, notes
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+    // El producto y sus claves se crean juntos o no se crea nada
+    const newId = withTransaction((db) => {
+      const result = db
+        .prepare(`
+          INSERT INTO digital_licenses (name, provider, license_type, image, price, status, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          name.trim(),
+          provider.trim(),
+          license_type,
+          image ? image.trim() : null,
+          price,
+          status,
+          notes ? notes.trim() : null
+        );
 
-    const result = insert.run(
-      name.trim(),
-      provider.trim(),
-      licenseKey,
-      license_type,
-      purchase_date || null,
-      image ? image.trim() : null,
-      price,
-      expiration_date || null,
-      status,
-      notes ? notes.trim() : null
-    );
+      const id = Number(result.lastInsertRowid);
+      insertGeneratedKeys(db, id, initial_stock);
+      return id;
+    });
 
-    const newId = Number(result.lastInsertRowid);
     const created = this.getById(newId);
     if (!created) {
       throw new Error("No se pudo obtener la licencia creada");
@@ -175,13 +179,8 @@ export const licenseService = {
       throw new Error("Licencia digital no encontrada");
     }
 
-    const purchaseDate = data.purchase_date !== undefined ? data.purchase_date : current.purchase_date;
-    const expirationDate = data.expiration_date !== undefined ? data.expiration_date : current.expiration_date;
-
-    if (purchaseDate && expirationDate) {
-      if (new Date(expirationDate) < new Date(purchaseDate)) {
-        throw new Error("La fecha de expiración no puede ser anterior a la de compra");
-      }
+    if (data.license_type !== undefined) {
+      assertValidType(data.license_type);
     }
 
     if (data.price !== undefined && data.price < 0) {
@@ -207,10 +206,6 @@ export const licenseService = {
       updates.push("license_type = ?");
       params.push(data.license_type);
     }
-    if (data.purchase_date !== undefined) {
-      updates.push("purchase_date = ?");
-      params.push(data.purchase_date || null);
-    }
     if (data.image !== undefined) {
       updates.push("image = ?");
       params.push(data.image ? data.image.trim() : null);
@@ -218,10 +213,6 @@ export const licenseService = {
     if (data.price !== undefined) {
       updates.push("price = ?");
       params.push(data.price);
-    }
-    if (data.expiration_date !== undefined) {
-      updates.push("expiration_date = ?");
-      params.push(data.expiration_date || null);
     }
     if (data.status !== undefined) {
       updates.push("status = ?");
@@ -257,9 +248,39 @@ export const licenseService = {
     return updated;
   },
 
+  // Las claves sin vender se eliminan con el producto; las vendidas se conservan (su
+  // license_id queda en NULL) porque pertenecen al historial de ventas
   delete(id: number): boolean {
-    const db = getDb();
-    const result = db.prepare("DELETE FROM digital_licenses WHERE id = ?").run(id);
-    return Number(result.changes) > 0;
+    return withTransaction((db) => {
+      db.prepare("DELETE FROM license_keys WHERE license_id = ? AND status = 'available'").run(id);
+      const result = db.prepare("DELETE FROM digital_licenses WHERE id = ?").run(id);
+      return Number(result.changes) > 0;
+    });
+  },
+
+  getKeys(licenseId: number): LicenseKey[] {
+    return getDb()
+      .prepare(`
+        SELECT k.id, k.license_id, k.license_key, k.status, si.sale_id,
+               k.sold_at, k.expires_at, k.created_at
+        FROM license_keys k
+        LEFT JOIN sale_items si ON si.id = k.sale_item_id
+        WHERE k.license_id = ?
+        ORDER BY k.status = 'sold', k.id DESC
+      `)
+      .all(licenseId) as unknown as LicenseKey[];
+  },
+
+  addKeys(licenseId: number, quantity: unknown): DigitalLicense {
+    assertValidKeyCount(quantity, false);
+
+    withTransaction((db) => {
+      if (!db.prepare("SELECT 1 FROM digital_licenses WHERE id = ?").get(licenseId)) {
+        throw new Error("Licencia digital no encontrada");
+      }
+      insertGeneratedKeys(db, licenseId, quantity);
+    });
+
+    return this.getById(licenseId)!;
   },
 };
