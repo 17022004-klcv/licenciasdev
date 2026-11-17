@@ -31,6 +31,18 @@ import {
 // "YYYY-MM-DD" → "DD/MM/YYYY" sin pasar por Date (evita el desfase de zona horaria)
 const formatDay = (value: string) => value.split("-").reverse().join("/");
 
+const DEFAULT_DESCRIPTION =
+  "Una licencia verificada para trabajar mejor, crear más y avanzar sin límites.";
+
+const CONTACT_TOPICS = [
+  "Información sobre una licencia",
+  "Problema con mi compra",
+  "Compras por volumen / empresas",
+  "Otro tema",
+];
+
+const EMPTY_CONTACT = { name: "", email: "", topic: CONTACT_TOPICS[0], message: "" };
+
 const formatPrice = (price: number) =>
   new Intl.NumberFormat("es-MX", { style: "currency", currency: "USD" }).format(
     price,
@@ -49,6 +61,28 @@ export default function Home() {
   const [purchaseError, setPurchaseError] = useState("");
   const [purchase, setPurchase] = useState<WebPurchaseResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [contact, setContact] = useState(EMPTY_CONTACT);
+  const [contactSending, setContactSending] = useState(false);
+  const [contactSentTo, setContactSentTo] = useState<string | null>(null);
+
+  const updateContact =
+    (field: keyof typeof EMPTY_CONTACT) =>
+    (
+      event: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) =>
+      setContact((current) => ({ ...current, [field]: event.target.value }));
+
+  // Envío simulado: no hay backend de contacto, solo se imita la espera de una petición
+  const submitContact = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setContactSending(true);
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    setContactSending(false);
+    setContactSentTo(contact.name.trim().split(" ")[0]);
+    setContact(EMPTY_CONTACT);
+  };
 
   const loadLicenses = useCallback(
     () =>
@@ -139,12 +173,12 @@ export default function Home() {
   return (
     <main className="landing-page">
       <header className="site-header">
-        <Link href="/" className="brand" aria-label="Licensia inicio">
+        <Link href="/" className="brand" aria-label="Licencia inicio">
           <span className="brand-mark">
             <FileKey size={18} />
           </span>
           <span>
-            licensia<span className="brand-dot">.</span>
+            licencia<span className="brand-dot">.</span>
           </span>
         </Link>
         <nav className={`main-nav ${menuOpen ? "is-open" : ""}`}>
@@ -311,6 +345,11 @@ export default function Home() {
                 <div className="license-content">
                   <div className="provider">{license.provider}</div>
                   <h3>{license.name}</h3>
+                  <p
+                    className={`license-description ${license.notes?.trim() ? "" : "is-empty"}`}
+                  >
+                    {license.notes?.trim() || DEFAULT_DESCRIPTION}
+                  </p>
                   <div className="license-meta">
                     <span>
                       {license.license_type === "indefinite"
@@ -339,7 +378,7 @@ export default function Home() {
 
       <section className="benefits-section" id="beneficios">
         <div className="benefits-intro">
-          <span className="section-kicker">La diferencia licensia</span>
+          <span className="section-kicker">La diferencia licencia</span>
           <h2>
             Comprar software
             <br />
@@ -384,17 +423,98 @@ export default function Home() {
       </section>
 
       <section className="contact-section" id="contacto">
-        <div>
+        <div className="contact-intro">
           <span className="section-kicker">¿Tienes una pregunta?</span>
           <h2>
             Hablemos de
             <br />
             <em>lo que necesitas.</em>
           </h2>
+          <p>
+            Déjanos tus datos y cuéntanos en qué te podemos ayudar. Te
+            responderemos en menos de 24 horas hábiles.
+          </p>
+          <a className="contact-link" href="mailto:hola@licencia.mx">
+            <Mail size={18} /> hola@licencia.mx <ArrowRight size={17} />
+          </a>
         </div>
-        <a className="contact-link" href="mailto:hola@licensia.mx">
-          <Mail size={18} /> hola@licensia.mx <ArrowRight size={17} />
-        </a>
+        <div className="contact-card">
+          {contactSentTo !== null ? (
+            <div className="contact-success" role="status">
+              <div className="success-icon">
+                <Check size={28} />
+              </div>
+              <h3>¡Mensaje enviado{contactSentTo ? `, ${contactSentTo}` : ""}!</h3>
+              <p>
+                Recibimos tu mensaje. Nuestro equipo te escribirá al correo que
+                nos dejaste.
+              </p>
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setContactSentTo(null)}
+              >
+                Enviar otro mensaje <ArrowRight size={15} />
+              </button>
+            </div>
+          ) : (
+            <form className="contact-form" onSubmit={submitContact}>
+              <div className="form-row">
+                <label className="field">
+                  <span>Nombre</span>
+                  <input
+                    value={contact.name}
+                    onChange={updateContact("name")}
+                    placeholder="Tu nombre"
+                    autoComplete="name"
+                    maxLength={60}
+                    required
+                  />
+                </label>
+                <label className="field">
+                  <span>Correo electrónico</span>
+                  <input
+                    type="email"
+                    value={contact.email}
+                    onChange={updateContact("email")}
+                    placeholder="tu@correo.com"
+                    autoComplete="email"
+                    maxLength={254}
+                    required
+                  />
+                </label>
+              </div>
+              <label className="field">
+                <span>Asunto</span>
+                <select value={contact.topic} onChange={updateContact("topic")}>
+                  {CONTACT_TOPICS.map((topic) => (
+                    <option key={topic}>{topic}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Mensaje</span>
+                <textarea
+                  value={contact.message}
+                  onChange={updateContact("message")}
+                  placeholder="Cuéntanos qué necesitas..."
+                  rows={4}
+                  minLength={10}
+                  maxLength={1000}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                className="primary-button full-button"
+                disabled={contactSending}
+              >
+                {contactSending ? "Enviando..." : "Enviar mensaje"}{" "}
+                <ArrowRight size={17} />
+              </button>
+            </form>
+          )}
+        </div>
       </section>
       <footer>
         <Link href="/" className="brand">
@@ -402,11 +522,11 @@ export default function Home() {
             <FileKey size={15} />
           </span>
           <span>
-            licensia<span className="brand-dot">.</span>
+            licencia<span className="brand-dot">.</span>
           </span>
         </Link>
         <span>Licencias que impulsan ideas.</span>
-        <span>© 2026 Licensia</span>
+        <span>© 2026 Licencia</span>
       </footer>
 
       {selected && (
@@ -427,10 +547,7 @@ export default function Home() {
             </div>
             <span className="section-kicker">{selected.provider}</span>
             <h2>{selected.name}</h2>
-            <p>
-              {selected.notes ||
-                "Una licencia verificada para trabajar mejor, crear más y avanzar sin límites."}
-            </p>
+            <p>{selected.notes?.trim() || DEFAULT_DESCRIPTION}</p>
             <div className="modal-price">
               <span>
                 Precio final ·{" "}

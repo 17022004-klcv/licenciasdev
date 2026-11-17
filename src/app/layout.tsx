@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Licensia | Software que impulsa ideas",
+  title: "Licencia | Software que impulsa ideas",
   description: "Licencias digitales verificadas para trabajar mejor.",
 };
 
